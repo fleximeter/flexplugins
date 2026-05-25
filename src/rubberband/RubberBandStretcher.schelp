@@ -1,0 +1,195 @@
+class:: RubberBandStretcher
+summary:: Time stretcher and formant preserving pitch shifter using the RubberBand library
+related:: Classes/PitchShift
+categories:: Libraries>JeffUGens, UGens>Filters>Pitch
+
+Description::
+
+RubberBandStretcher is a phase vocoder time stretcher and formant-preserving pitch shifter 
+using the open-source RubberBand library. If you just want to do pitch shifting, you should 
+use link::Classes/RubberBandPS::--it uses the RubberBandLiveShifter implementation which 
+has lower latency for real-time pitch shifting.
+
+A few of the options here cannot be set after construction. All other options may be 
+changed on the fly. Since this UGen feeds a real-time audio stream through the stretcher, 
+it cannot be used with stretch ratios of less than 1.0. Audio shrinkage requires an offline 
+process pass stored in a buffer--it cannot happen in real time.
+
+There will be some slight latency in the output. If you wish to absolutely synchronize 
+the start time of the stretched output with the input signal, you will need to use a 
+Delay UGen for that.
+
+For more information about the RubberBand library, visit link::https://breakfastquay.com/rubberband/::.
+
+classmethods::
+
+method::ar
+
+argument::in
+The input sound
+
+argument::timeRatio
+The time stretch ratio. Values less than 1.0 will be clipped internally to 1.0.
+
+argument::pitchRatio
+The pitch shift ratio. For safety, values are clipped between 0.01 and 64.
+
+argument::formantRatio
+The formant shift ratio. The default is 0.0, which means that the pitch shifter 
+will automatically calculate the formant shift for formant preservation. 
+For safety, unless the strong::formantRatio:: is 0.0, the value will be clipped between 0.01 and 64. 
+
+argument::transientsMode
+There are three transients modes, numbered 0, 1, and 2. 
+Explanations of what these modes do are quoted directly 
+from the source code comments in the RubberBand library 
+(see link::https://github.com/breakfastquay/rubberband/blob/default/src/RubberBandStretcher.cpp::): 
+
+0--"Reset component phases at the peak of each transient (the start of a significant note or 
+percussive event).  This, the default setting, usually results in a clear-sounding output; but it is not always 
+consistent, and may cause interruptions in stable sounds 
+present at the same time as transient events.  The 
+OptionDetector flags (below) can be used to tune this to some 
+extent."
+
+1--"Reset component phases at the peak of each transient, outside a frequency range typical of 
+musical fundamental frequencies.  The results may be more regular for mixed stable and percussive 
+notes than [option 0], but with a "phasier" sound.  The balance may sound very good for certain 
+types of music and fairly bad for others."
+
+2--"Do not reset component phases at any point.  The results will be smoother and more regular 
+but may be less clear than with either of the other transients flags."
+
+argument::detectorMode
+There are three transient detection modes, numbered 0, 1, and 2. 
+Explanations of what these modes do are quoted directly 
+from the source code comments in the RubberBand library: 
+
+0--"Use a general-purpose transient detector which is likely to be 
+good for most situations.  This is the default."
+
+1--"Detect percussive transients.  Note that this was the default and only option 
+in Rubber Band versions prior to 1.5."
+
+2--"Use an onset detector with less of a bias toward percussive transients.  
+This may give better results with certain material (e.g. relatively monophonic piano music)."
+
+argument::phaseMode
+There are two phase adjustment settings, numbered 0 and 1. 
+Explanations of what these modes do are quoted directly 
+from the source code comments in the RubberBand library: 
+
+0--"Adjust phases when stretching in such a way as to try to retain the continuity of phase 
+relationships between adjacent frequency bins whose phases
+are behaving in similar ways.  This, the default setting,
+should give good results in most situations."
+
+1--"Adjust the phase in each 
+frequency bin independently from its neighbours.  This 
+usually results in a slightly softer, phasier sound."
+
+argument::pitchQuality
+There are three pitch quality modes, numbered 0, 1, and 2. 
+Explanations of what these modes do are quoted directly 
+from the source code comments in the RubberBand library: 
+
+0--"Favour CPU cost over sound 
+quality. This is the default. Use this when time-stretching 
+only, or for fixed pitch shifts where CPU usage is of 
+concern. Do not use this for arbitrarily time-varying pitch 
+shifts (see [option 2] below)."
+
+1--"Favour sound quality over CPU 
+cost. Use this for fixed pitch shifts where sound quality is 
+of most concern. Do not use this for arbitrarily time-varying 
+pitch shifts (see [option 2] below)."
+
+2--"Use a method that 
+supports dynamic pitch changes without discontinuities, 
+including when crossing the 1.0 pitch scale. This may cost 
+more in CPU than the default, especially when the pitch scale 
+is exactly 1.0. You should use this option whenever you wish 
+to support dynamically changing pitch shift during 
+processing."
+
+argument::windowOption
+This option can only be set once, on construction. There are three 
+window size options, numbered 0, 1, and 2. 
+Explanations of what these modes do are quoted directly 
+from the source code comments in the RubberBand library: 
+
+0--"Use the default window size. 
+The actual size will vary depending on other parameters. 
+This option is expected to produce better results than the 
+other window options in most situations. In the R3 engine 
+this causes the engine's full multi-resolution processing 
+scheme to be used."
+
+1--"Use a shorter window. This has 
+different effects with R2 and R3 engines. 
+With the R2 engine it may result in crisper sound for audio 
+that depends strongly on its timing qualities, but is likely 
+to sound worse in other ways and will have similar 
+efficiency. 
+With the R3 engine, it causes the engine to be restricted to 
+a single window size, resulting in both dramatically faster 
+processing and lower delay than OptionWindowStandard, but at 
+the expense of some sound quality. It may still sound better 
+for non-percussive material than the R2 engine. 
+With both engines it reduces the start delay somewhat...."
+
+2--"Use a longer window. With the R2 
+engine this is likely to result in a smoother sound at the 
+expense of clarity and timing. The R3 engine currently 
+ignores this option, treating it like [option 0]."
+
+argument::smoothing
+This option can only be set once, on construction. 
+There are two smoothing modes, numbered 0 and 1. 
+Explanations of what these modes do are quoted directly 
+from the source code comments in the RubberBand library: 
+
+0--"Do not use time-domain smoothing. This is the default."
+
+1--"Use time-domain smoothing.  This 
+will result in a softer sound with some audible artifacts 
+around sharp transients, but it may be appropriate for longer 
+stretches of some instruments and can mix well with 
+[windowOption 1]."
+
+argument::engine
+This option can only be set once, on construction. 
+There are two stretching engine options, numbered 0 and 1. 
+Explanations of what these modes do are quoted directly 
+from the source code comments in the RubberBand library: 
+
+0--"Use the Rubber Band Library R2 (Faster) engine. 
+This is the engine implemented in Rubber Band Library v1.x and v2.x, 
+and it remains the default in newer versions. It uses substantially 
+less CPU than the R3 engine and there are still many situations 
+in which it is likely to be the more appropriate choice."
+
+1--"Use the Rubber Band Library R3 
+(Finer) engine. This engine was introduced in Rubber Band 
+Library v3.0. It produces higher-quality results than the R2 
+engine for most material, especially complex mixes, vocals 
+and other sounds that have soft onsets and smooth pitch 
+changes, and music with substantial bass content. However, it 
+uses much more CPU power than the R2 engine."
+
+argument::mul
+An amount by which to multiply the output signal
+
+argument::add
+An amount to add to the output signal
+
+Examples::
+
+code::
+b = Buffer.read(s, ExampleFiles.child);
+{
+	var sig = PlayBuf.ar(1, b, BufRateScale.ir(b));
+	sig = RubberBandStretcher.ar(sig, 4.0, 0.5);
+	sig!2;
+}.play;
+::

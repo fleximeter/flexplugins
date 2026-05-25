@@ -1,0 +1,33 @@
+class:: PV_MagMirror
+summary:: Mirrors the magnitudes of FFT bins
+related:: Classes/PV_Invert
+categories:: Libraries>JeffUGens, UGens>FFT
+related:: Guides/FFT-Overview
+
+Description::
+
+PV_MagMirror mirrors the magnitudes of all FFT bins. The loudest bin becomes the softest,
+and the softest becomes the loudest (the magnitudes are swapped). All other bins scale
+in a similar fashion.
+
+classmethods::
+
+method::new
+
+argument::buffer
+The FFT buffer
+
+Examples::
+
+code::
+{
+    var sig, chain;
+    sig = SoundIn.ar(0);
+    chain = FFT(LocalBuf(2048), sig);
+	chain = PV_MagMirror(chain);
+    sig = IFFT(chain);
+    sig = LPF.ar(sig, 1500);
+    sig = Pan2.ar(sig);
+    Out.ar(0, sig);
+}.play;
+::

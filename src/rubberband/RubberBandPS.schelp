@@ -1,0 +1,63 @@
+class:: RubberBandPS
+summary:: Formant preserving pitch shifter using the RubberBand library
+related:: Classes/PitchShift
+categories:: Libraries>JeffUGens, UGens>Filters>Pitch
+
+Description::
+
+RubberBandPS is a high-quality formant preserving pitch shifter using the RubberBand library.
+Due to the nature of its implementation, there is some latency. The authors of the plugin say,
+"Using RubberBandLiveShifter also gives a shorter processing delay than a typical buffering setup 
+using RubberBandStretcher, making it a useful choice for some streamed or live situations. However, 
+it is still not a low-latency effect, with a delay of 50ms or more between input and output signals 
+depending on configuration." (link::https://github.com/breakfastquay/rubberband/blob/default/src/RubberBandLiveShifter.cpp::) 
+The delay is noticeable if you are playing things with percussive onsets. 
+It is not always a deal-breaker--you probably won't have trouble if you're harmonizing a bowed 
+vibraphone, for example. Also, if you are using the original non-pitch-shifted sound along with 
+the pitch-shifted sound, you can throw a short delay into the signal chain to synchronize the two 
+(and tune the delay time by ear). See one of the code examples below for an illustration of the delay time.
+
+For more information about the RubberBand library, visit link::https://breakfastquay.com/rubberband/::.
+
+classmethods::
+
+method::ar
+
+argument::in
+The input sound
+
+argument::pitchRatio
+The pitch shift ratio. For safety, values are clipped between 0.01 and 64.
+
+argument::formantRatio
+The formant shift ratio. The default is 0.0, which means that the pitch shifter
+will automatically calculate the formant shift for formant preservation.
+For safety, unless the strong::formantRatio:: is 0.0, the value will be clipped between 0.01 and 64.
+
+argument::mul
+An amount by which to multiply the output signal
+
+argument::add
+An amount to add to the output signal
+
+Examples::
+
+A basic example
+code::
+{
+	var sig = Saw.ar(440, 1.0);
+	sig = RubberBandPS.ar(sig, 0.5, 0.5);
+}.play;
+::
+
+An example that shows the latency
+code::
+{
+	var sig, shift;
+	sig = Saw.ar(440, 1.0);
+	shift = RubberBandPS.ar(sig, 0.5, 0.5);
+	sig = sig * Env.perc(0.01, 0.3).ar;
+	shift = shift * Env.perc(0.01, 0.3).ar;
+	sig + shift
+}.play;
+::

@@ -1,0 +1,39 @@
+class:: PV_MagXFade
+summary:: Equal power crossfade between the magnitudes of two FFT buffers
+related:: Classes/PV_Morph, Classes/PV_XFade
+categories:: Libraries>JeffUGens, UGens>FFT
+related:: Guides/FFT-Overview
+
+Description::
+
+PV_MagXFade crossfades between the magnitudes of two FFT buffers.
+Phase is preserved. The result is stored in the first buffer.
+
+classmethods::
+
+method::new
+
+argument::buffer1
+The first FFT buffer
+
+argument::buffer2
+The second FFT buffer
+
+argument::fade
+The fade position (0.0 to 1.0)
+
+Examples::
+
+code::
+{
+    var sig, chain1, chain2;
+    sig = SoundIn.ar(0);
+    chain1 = FFT(LocalBuf(2048), sig);
+	chain1 = PV_MagAbove(chain1, 0.5);
+    chain2 = PV_MagSqueeze(chain1, 0.5, 1.4);
+    chain1 = PV_MagXFade(chain1, chain2, 0.5);
+    sig = IFFT(chain1);
+    sig = Pan2.ar(sig);
+    Out.ar(0, sig);
+}.play;
+::

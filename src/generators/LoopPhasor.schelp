@@ -1,0 +1,93 @@
+class:: LoopPhasor
+summary:: Modified Phasor with looping for sample playback
+related:: Classes/Phasor, Classes/BufRd
+categories::  Libraries>JeffUGens, UGens>Triggers, UGens>Buffer
+
+
+Description::
+
+LoopPhasor is a linear ramp between start and end values, with an additional
+sub-ramp between loop start and loop end values.
+
+The purpose of this modification is to allow for playing audio samples
+with predetermined loop points within the sample. Say we only want to play
+the attack portion of the sample at the beginning, then have loop points later,
+and allow the sample to stop playing naturally. If you use Phasor, this is not
+possible because you can only loop back to the start position. LoopPhasor
+solves this by defining subsidiary loop points.
+
+When its trigStart trigger input crosses from non-positive to positive, 
+LoopPhasor's output will jump to its start position.
+When its trigEnd trigger input crosses from non-positive to positive,
+LoopPhasor will stop looping and play to endPos. Upon reaching loopEnd LoopPhasor will wrap back to loopStart.
+
+
+note::
+Since end and loopEnd are defined as the wrap points, their values are never
+actually output (although loopEnd may be output if trigEnd is activated).
+::
+
+note::
+LoopPhasor is designed to be used as an index control with link::Classes/BufRd::.
+::
+
+classmethods::
+
+method::ar, kr
+
+argument::trigStart
+When triggered, jump to start.
+
+argument::trigEnd
+When triggered, stop looping and play to end. The LoopPhasor will not 
+reset to the start position unless you trigger it manually.
+
+argument::rate
+The amount of change per sample, i.e at a rate of 1 the value of
+each sample will be 1 greater than the preceding sample.
+
+argument::start
+Start point of the ramp.
+
+argument::end
+End point of the ramp.
+
+argument::loopStart
+Start point of the loop sub-ramp.
+
+argument::loopEnd
+End point of the loop sub-ramp.
+
+Examples::
+
+code::
+(
+p = Platform.resourceDir +/+ "sounds/a11wlk01.wav";
+b = Buffer.read(s, p);
+x = Bus.audio(s, 1);
+
+SynthDef(\ptr, {
+	var sig;
+	sig = LoopPhasor.ar(\t_start.tr(0.0), \t_end.tr(0.0), \rate.kr(1.0) * BufRateScale.ir(b), 0.0, BufFrames.kr(b), \loopStart.ir(0), \loopEnd.ir(1));
+	Out.ar(\out.kr(0), sig);
+}).add;
+
+SynthDef(\player, {
+	var sig, ptr_in;
+	ptr_in = In.ar(\ptr.kr(0));
+	sig = BufRd.ar(1, b, ptr_in, 0);
+	Out.ar(0, sig);
+}).add;
+
+// we need two synths: a pointer synth and a player synth
+y = Synth(\ptr, [\out, x, \loopStart, 80e3, \loopEnd, 120e3]);
+z = Synth(\player, [\ptr, x], addAction: \addToTail);
+
+// to stop looping and end naturally
+y.set(\t_end, 1.0);
+
+// free the synths
+z.free;
+y.free;
+)
+::

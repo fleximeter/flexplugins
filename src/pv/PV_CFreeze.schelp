@@ -1,0 +1,63 @@
+class:: PV_CFreeze
+summary:: Modified PV_MagFreeze for phase vocoder freezing
+related:: Classes/PV_MagFreeze, Classes/PV_Freeze
+categories:: Libraries>JeffUGens, UGens>FFT
+related:: Guides/FFT-Overview
+
+Description::
+
+PV_CFreeze performs a phase vocoder spectral freeze. In a classic spectral freeze,
+the magnitudes are frozen and the phase is updated with phase differences for each new
+FFT frame. This implementation is based on Jean-François Charles' Max patch for freezing footnote::The original Max patches are available at link::https://newfloremusic.gumroad.com/::. ::,
+which follows this algorithm:
+
+numberedlist::
+## When not freezing, store the last N magnitude spectra in a circular buffer. Also store the corresponding last N phase differences in a circular buffer.
+## When freezing, perform the following steps for each output FFT frame:
+numberedlist::
+## For each bin, choose a random magnitude and phase difference pair from the last N frames stored in the circular buffers.
+## Compute the output phases based on the last phases and the phase differences selected in (a). Store these phases internally.
+## Output the custom magnitude and phase spectra.
+::
+## To reduce unwanted spectral noise artifacts, apply a noise gate to the spectrum before running the IFFT.
+::
+Since there is already functionality available for spectral noise gating in SuperCollider,
+PV_CFreeze does not implement step 3 internally.
+
+note::
+The strong::frameMemory:: parameter can only be set once--on initialization.
+::
+
+note::
+In order to freeze the spectrum successfully, you will need to allow N FFT frames to
+pass through PV_CFreeze first (where N = strong::frameMemory::).
+::
+
+classmethods::
+
+method::new
+
+argument::buffer
+The FFT buffer
+
+argument::freeze
+When set to > 0, the spectrum will be frozen.
+
+argument::frameMemory
+The number of previous frames to remember before freezing
+
+Examples::
+
+code::
+{
+    var sig, chain;
+    sig = SoundIn.ar(0);
+    chain = FFT(LocalBuf(2048), sig);
+    chain = PV_CFreeze(chain, Env([0, 0, 1, 1], [1, 1e-4, inf], 'lin').kr, 8);
+	// Apply a spectral noise gate
+	chain = PV_MagAbove(chain, FFTPeak.kr(chain)[1] * 0.07);
+    sig = IFFT(chain);
+    sig = Pan2.ar(sig);
+    Out.ar(0, sig);
+}.play;
+::
