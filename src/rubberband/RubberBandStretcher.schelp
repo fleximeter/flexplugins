@@ -21,7 +21,7 @@ Delay UGen for that.
 
 For more information about the RubberBand library, visit link::https://breakfastquay.com/rubberband/::.
 
-::note
+note::
 This UGen uses quite a bit of CPU resources, which could be a problem on a less powerful computer.
 You should also consider increasing the strong::memSize:: option for the server from the default 128MB.
 ::
