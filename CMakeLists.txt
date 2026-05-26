@@ -108,7 +108,7 @@ add_subdirectory(src/generators)
 add_subdirectory(src/pv)
 add_subdirectory(src/rubberband)
 
-install(TARGETS pv rubberband
+install(TARGETS generators pv rubberband
     LIBRARY DESTINATION ${EXTENSIONS_DIR}/Jeff/Plugins
 )
 install(FILES 
