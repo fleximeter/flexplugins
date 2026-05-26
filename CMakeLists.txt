@@ -2,7 +2,7 @@
 # are adapted from the prototype CMakeLists.txt provided with the SuperCollider plugin starter code.
 
 cmake_minimum_required(VERSION 3.5)
-project(fplugins)
+project(flexplugins)
 
 # The SC_PATH is the path to the SuperCollider source code, and is needed for building libraries.
 set(SC_PATH $ENV{SC_PATH} CACHE STRING "Path to SuperCollider source")
@@ -96,11 +96,11 @@ endif()
 # For installation
 if(NOT DEFINED EXTENSIONS_DIR)
     if (WIN32)
-        set(EXTENSIONS_DIR %LOCALAPPDATA%/SuperCollider/Extensions)
+        set(EXTENSIONS_DIR $ENV{LOCALAPPDATA}/SuperCollider/Extensions)
     elseif (APPLE)
-        set(EXTENSIONS_DIR "~/Library/Application Support/SuperCollider/Extensions")
+        set(EXTENSIONS_DIR "$ENV{HOME}/Library/Application Support/SuperCollider/Extensions")
     elseif (UNIX)
-        set(EXTENSIONS_DIR ~/.local/share/SuperCollider/Extensions)
+        set(EXTENSIONS_DIR $ENV{HOME}/.local/share/SuperCollider/Extensions)
     endif()
 endif()
 
