@@ -3,7 +3,7 @@ File: pv.cpp
 Author: Jeff Martin
 
 Description:
-
+A collection of PV UGens for SuperCollider.
 
 Copyright © 2026 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com

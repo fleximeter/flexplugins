@@ -3,9 +3,7 @@ File: generators.cpp
 Author: Jeff Martin
 
 Description:
-This is a SuperColllider UGen based on the Phasor class.
-It allows setting loop start and end points for playing samples.
-This is useful for mimicking the functionality of commercial sampler synthesizers.
+A collection of SuperCollider generator UGens
 
 Copyright © 2025 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com

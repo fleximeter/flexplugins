@@ -17,10 +17,10 @@ Squeezes spectral magnitudes to fit between (low, high).
 Equal power crossfade between the magnitudes of two FFT buffers.
 
 ### RubberBandPS
-A formant-preserving phase vocoder pitch shifter using the RubberBand library.
+A formant-preserving phase vocoder pitch shifter using the [RubberBand library](https://breakfastquay.com/rubberband/).
 
 ### RubberBandStretcher
-A phase vocoder pitch shifter and time stretcher using the RubberBand library.
+A phase vocoder pitch shifter and time stretcher using the [RubberBand library](https://breakfastquay.com/rubberband/).
 
 ## Building
 To build and install these plugins, see `BUILDING.md`.

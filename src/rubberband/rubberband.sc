@@ -2,7 +2,7 @@
 // Author: Jeff Martin
 //
 // Description:
-// A high quality, formant-preserving live pitch shifter using the RubberBand library.
+// A high quality, formant-preserving live pitch shifter and time stretcher using the RubberBand library.
 // 
 // Copyright © 2026 by Jeffrey Martin. All rights reserved.
 // Website: https://www.jeffreymartincomposer.com

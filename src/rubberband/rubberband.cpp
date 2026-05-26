@@ -3,7 +3,7 @@ File: rubberband.cpp
 Author: Jeff Martin
 
 Description:
-A high quality, formant-preserving live pitch shifter using the RubberBand library.
+A high quality, formant-preserving live pitch shifter and time stretcher using the RubberBand library.
 
 Copyright © 2026 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com
@@ -28,7 +28,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "rubberband/RubberBandLiveShifter.h"
 #include "rubberband/RubberBandStretcher.h"
 #include "ringbuffer.hpp"
-#include <iostream>
 #include <limits>
 
 InterfaceTable *ft;
