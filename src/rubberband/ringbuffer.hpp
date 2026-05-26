@@ -84,7 +84,7 @@ void RingBuffer<T>::readBlock(T* destination, size_t length) {
                 m_outputPointer = 0;
             }
         }
-        m_newSamples -= length;
+        m_newSamples -= static_cast<int>(length);
         if (m_newSamples < 0) m_newSamples = 0;
     }
 }

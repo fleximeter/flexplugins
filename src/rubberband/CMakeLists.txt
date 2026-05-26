@@ -3,6 +3,13 @@ CPMAddPackage(NAME RUBBERBAND GITHUB_REPOSITORY breakfastquay/rubberband GIT_TAG
 add_library(rubberband_lib STATIC ${RUBBERBAND_SOURCE_DIR}/single/RubberBandSingle.cpp)
 include_directories(${RUBBERBAND_SOURCE_DIR})
 
+if(WIN32)
+    target_compile_definitions(rubberband_lib PRIVATE
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+    )
+endif()
+
 # Create the project library
 add_library(rubberband MODULE rubberband.cpp)
 target_link_libraries(rubberband PRIVATE rubberband_lib)

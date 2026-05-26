@@ -39,13 +39,13 @@ struct RubberBandPS : public Unit {
     RingBuffer<float>* m_receiveBuffer;
     float *m_shiftBufferIn;
     float *m_shiftBufferOut;
-    float m_blockSize;
-    float m_shifterBlockSize;
+    size_t m_blockSize;
+    size_t m_shifterBlockSize;
 };
 
 struct RubberBandStretcher : public Unit {
     RubberBand::RubberBandStretcher* m_stretcher;
-    int m_samplesToDiscard;
+    size_t m_samplesToDiscard;
     float m_timeRatio;
     float m_pitchRatio;
     float m_formantRatio;
@@ -96,7 +96,7 @@ static void RubberBandPS_Ctor(RubberBandPS *unit) {
     // 0x01000000  // formant preserving
     // 0x00000000  // no formant preservation
     unit->m_shifter = (RubberBand::RubberBandLiveShifter*)RTAlloc(unit->mWorld, sizeof(RubberBand::RubberBandLiveShifter));
-    new (unit->m_shifter) RubberBand::RubberBandLiveShifter(SAMPLERATE, 1, 0x01000000);
+    new (unit->m_shifter) RubberBand::RubberBandLiveShifter(static_cast<size_t>(SAMPLERATE), 1, 0x01000000);
     unit->m_shifter->setPitchScale(sc_clip(pitchRatio, 1e-2, 64));
     unit->m_blockSize = BUFLENGTH;
     unit->m_shifterBlockSize = unit->m_shifter->getBlockSize();
@@ -242,7 +242,7 @@ static void RubberBandStretcher_Ctor(RubberBandStretcher *unit) {
     float timeRatio = IN0(1);
     float pitchRatio = IN0(2);
     float formantRatio = IN0(3);
-    int transientsMode = IN0(4);
+    int transientsMode = static_cast<int>(IN0(4));
     int detector = static_cast<int>(IN0(5));
     int phaseOption = static_cast<int>(IN0(6));
     int pitchQuality = static_cast<int>(IN0(7));
@@ -309,7 +309,7 @@ static void RubberBandStretcher_Ctor(RubberBandStretcher *unit) {
 
     // Allocate the shifter with the given options
     unit->m_stretcher = (RubberBand::RubberBandStretcher*)RTAlloc(unit->mWorld, sizeof(RubberBand::RubberBandStretcher));
-    new (unit->m_stretcher) RubberBand::RubberBandStretcher(SAMPLERATE, 1, options, timeRatio, pitchRatio);
+    new (unit->m_stretcher) RubberBand::RubberBandStretcher(static_cast<size_t>(SAMPLERATE), 1, options, timeRatio, pitchRatio);
 
     // Initialize the shifter
     // The shifter accepts a block size (which must be set before the first process()
@@ -329,7 +329,7 @@ static void RubberBandStretcher_Ctor(RubberBandStretcher *unit) {
     }
 
     // The number of initial zeros required
-    int startPad = unit->m_stretcher->getPreferredStartPad();
+    size_t startPad = unit->m_stretcher->getPreferredStartPad();
     
     // The number of samples to discard at the beginning of the stretcher output.
     // This is handled in the RubberBandStretcher_next() method.
