@@ -1,7 +1,7 @@
 class:: RubberBandStretcher
 summary:: Time stretcher and formant preserving pitch shifter using the RubberBand library
 related:: Classes/PitchShift
-categories:: Libraries>JeffUGens, UGens>Filters>Pitch
+categories:: Libraries>FlexUGens, UGens>Filters>Pitch
 
 Description::
 
@@ -20,6 +20,11 @@ the start time of the stretched output with the input signal, you will need to u
 Delay UGen for that.
 
 For more information about the RubberBand library, visit link::https://breakfastquay.com/rubberband/::.
+
+::note
+This UGen uses quite a bit of CPU resources, which could be a problem on a less powerful computer.
+You should also consider increasing the strong::memSize:: option for the server from the default 128MB.
+::
 
 classmethods::
 

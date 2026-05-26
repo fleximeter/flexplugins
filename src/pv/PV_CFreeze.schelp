@@ -1,7 +1,7 @@
 class:: PV_CFreeze
 summary:: Modified PV_MagFreeze for phase vocoder freezing
 related:: Classes/PV_MagFreeze, Classes/PV_Freeze
-categories:: Libraries>JeffUGens, UGens>FFT
+categories:: Libraries>FlexUGens, UGens>FFT
 related:: Guides/FFT-Overview
 
 Description::
@@ -25,7 +25,7 @@ Since there is already functionality available for spectral noise gating in Supe
 PV_CFreeze does not implement step 3 internally.
 
 note::
-The strong::frameMemory:: parameter can only be set once--on initialization.
+The strong::frameMemory:: parameter can only be set once--on initialization. It is clipped internally to between 1 and 64.
 ::
 
 note::

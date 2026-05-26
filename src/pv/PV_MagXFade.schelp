@@ -1,7 +1,7 @@
 class:: PV_MagXFade
 summary:: Equal power crossfade between the magnitudes of two FFT buffers
 related:: Classes/PV_Morph, Classes/PV_XFade
-categories:: Libraries>JeffUGens, UGens>FFT
+categories:: Libraries>FlexUGens, UGens>FFT
 related:: Guides/FFT-Overview
 
 Description::

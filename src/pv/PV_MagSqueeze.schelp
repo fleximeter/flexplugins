@@ -1,7 +1,7 @@
 class:: PV_MagSqueeze
 summary:: Squeezes the magnitudes of FFT bins
 related:: Classes/PV_Compander, Classes/PV_MagClip, Classes/PV_MagGate
-categories:: Libraries>JeffUGens, UGens>FFT
+categories:: Libraries>FlexUGens, UGens>FFT
 related:: Guides/FFT-Overview
 
 Description::

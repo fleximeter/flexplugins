@@ -113,9 +113,9 @@ static void PV_CFreeze_Ctor(PV_CFreeze *unit) {
     unit->mNyq = nullptr;
     unit->mPhase = nullptr;
     unit->mPhaseDiffs = nullptr;
-    int numFrames = IN0(2);
+    int numFrames = static_cast<int>(IN0(2));
     // prevent the user from doing something nuts
-    unit->mNumFrames = sc_wrap(numFrames, 1, 20);
+    unit->mNumFrames = sc_clip(numFrames, 1, 64);
 }
 
 static void PV_CFreeze_Dtor(PV_CFreeze *unit) {

@@ -1,4 +1,4 @@
-# fplugins
+# flexplugins
 A collection of SuperCollider plugins developed by Jeff Martin (www.jeffreymartincomposer.com).
 
 ## List of Plugins

@@ -1,7 +1,7 @@
 class:: LoopPhasor
 summary:: Modified Phasor with looping for sample playback
 related:: Classes/Phasor, Classes/BufRd
-categories::  Libraries>JeffUGens, UGens>Triggers, UGens>Buffer
+categories::  Libraries>FlexUGens, UGens>Triggers, UGens>Buffer
 
 
 Description::
