@@ -47,7 +47,8 @@ argument::frameMemory
 The number of previous frames to remember before freezing
 
 Examples::
-
+You can manually trigger the freeze, but it's more convenient for it to happen automatically. 
+A simple example: freeze the sound after 1 second.
 code::
 {
     var sig, chain;
@@ -57,6 +58,46 @@ code::
 	// Apply a spectral noise gate
 	chain = PV_MagAbove(chain, FFTPeak.kr(chain)[1] * 0.07);
     sig = IFFT(chain);
+    sig = Pan2.ar(sig);
+    Out.ar(0, sig);
+}.play;
+::
+or, freeze when a specific pitch is detected
+code::
+{
+	var sig, hasPitch, pitch, chain, trig, targetFreq;
+	// Freeze when C4 is detected
+	targetFreq = 60.midicps;
+    sig = SoundIn.ar(0);
+	# pitch, hasPitch = Pitch.kr(sig, median: 5);
+	// Only freeze if the detected pitch is closer than 0.5 semitones
+	// to the target frequency.
+	trig = (pitch/targetFreq).ratiomidi.abs < 0.5;
+	trig = Latch.kr(trig, trig);
+	chain = FFT(LocalBuf(512), sig);
+    // Wait 0.1 seconds after the pitch is detected before freezing
+	chain = PV_CFreeze(chain, DelayN.kr(trig, 0.2, 0.1), 8);
+	chain = PV_MagAbove(chain, 0.1);
+	sig = IFFT(chain);
+	// Only output sound if the pitch was detected.
+	// Adjust lag for a good fade in time.
+	sig = sig.madd(trig.lag(0.5));
+    sig = Pan2.ar(sig);
+    Out.ar(0, sig);
+}.play;
+::
+or, freeze when you detect an onset (this example uses Coyote, which comes with SC3plugins)
+code::
+{
+	var sig, chain, trig;
+    sig = SoundIn.ar(0);
+	trig = Coyote.kr(sig);
+	trig = Latch.kr(trig, trig);
+	chain = FFT(LocalBuf(512), sig);
+    // Wait 0.1 seconds after the pitch is detected before freezing
+	chain = PV_CFreeze(chain, DelayN.kr(trig, 0.2, 0.1), 8);
+	chain = PV_MagAbove(chain, 0.1);
+	sig = IFFT(chain);
     sig = Pan2.ar(sig);
     Out.ar(0, sig);
 }.play;
