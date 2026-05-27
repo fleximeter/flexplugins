@@ -22,6 +22,12 @@ A formant-preserving phase vocoder pitch shifter using the [RubberBand library](
 ### RubberBandStretcher
 A phase vocoder pitch shifter and time stretcher using the [RubberBand library](https://breakfastquay.com/rubberband/).
 
+## To Install
+You can download a compiled version of the plugins from Releases in this repository.
+Extract the ZIP file and copy its contents to your SuperCollider extensions directory
+(you can see where that is by running `Platform.userExtensionDir` in sclang).
+Then restart SuperCollider if it is open.
+
 ## Building
 To build and install these plugins, see `BUILDING.md`.
 
