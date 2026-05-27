@@ -124,6 +124,8 @@ install(FILES
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )
 install(FILES
+    src/generators/ImpulseDropout.schelp
+    src/generators/ImpulseJitter.schelp
     src/generators/LoopPhasor.schelp
     src/pv/PV_CFreeze.schelp
     src/pv/PV_MagMirror.schelp
