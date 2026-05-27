@@ -4,6 +4,11 @@
 cmake_minimum_required(VERSION 3.5)
 project(flexplugins)
 
+# To make a ZIP archive
+set(CPACK_GENERATOR "ZIP")
+set(CPACK_PACKAGE_NAME "flexplugins")
+include(CPack)
+
 # The SC_PATH is the path to the SuperCollider source code, and is needed for building libraries.
 set(SC_PATH $ENV{SC_PATH} CACHE STRING "Path to SuperCollider source")
 include_directories(${SC_PATH}/include/plugin_interface)
@@ -93,29 +98,29 @@ if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mstackrealign")
 endif()
 
-# For installation
-if(NOT DEFINED EXTENSIONS_DIR)
-    if (WIN32)
-        set(EXTENSIONS_DIR $ENV{LOCALAPPDATA}/SuperCollider/Extensions)
-    elseif (APPLE)
-        set(EXTENSIONS_DIR "$ENV{HOME}/Library/Application Support/SuperCollider/Extensions")
-    elseif (UNIX)
-        set(EXTENSIONS_DIR $ENV{HOME}/.local/share/SuperCollider/Extensions)
-    endif()
-endif()
-
 add_subdirectory(src/generators)
 add_subdirectory(src/pv)
 add_subdirectory(src/rubberband)
 
+# For installation
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    if(WIN32)
+        set(CMAKE_INSTALL_PREFIX $ENV{LOCALAPPDATA}/SuperCollider/Extensions/flexplugins CACHE PATH "Install path prefix" FORCE)
+    elseif(APPLE)
+        set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/Library/Application Support/SuperCollider/Extensions/flexplugins" CACHE PATH "Install path prefix" FORCE)
+    else()
+        set(CMAKE_INSTALL_PREFIX $ENV{HOME}/.local/share/SuperCollider/Extensions/flexplugins CACHE PATH "Install path prefix" FORCE)
+    endif()
+endif()
+
 install(TARGETS generators pv rubberband
-    LIBRARY DESTINATION ${EXTENSIONS_DIR}/Jeff/Plugins
+    LIBRARY DESTINATION Plugins
 )
 install(FILES 
     src/generators/generators.sc
     src/pv/pv.sc
     src/rubberband/rubberband.sc
-    DESTINATION ${EXTENSIONS_DIR}/Jeff/Classes
+    DESTINATION Classes
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )
 install(FILES
@@ -126,11 +131,12 @@ install(FILES
     src/pv/PV_MagXFade.schelp
     src/rubberband/RubberBandPS.schelp
     src/rubberband/RubberBandStretcher.schelp
-    DESTINATION ${EXTENSIONS_DIR}/Jeff/HelpSource/Classes
+    DESTINATION HelpSource/Classes
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )
 if(SUPERNOVA)
     install(TARGETS generators_supernova pv_supernova rubberband_supernova
-        LIBRARY DESTINATION ${EXTENSIONS_DIR}/Jeff/Plugins
+        LIBRARY DESTINATION Plugins
     )
 endif()
+
