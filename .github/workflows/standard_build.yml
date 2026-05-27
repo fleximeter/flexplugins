@@ -16,9 +16,9 @@ jobs:
     - name: clone supercollider
       run: git clone -b 3.14 --recurse-submodules https://github.com/supercollider/supercollider.git
     - name: make build dir
-      run: mkdir build
+      run: mkdir build && cd build
     - name: cmake configure
-      run: cmake -DSUPERNOVA=ON -DSC_PATH="./supercollider" -DCMAKE_BUILD_TYPE=Release ..
+      run: cmake -DSUPERNOVA=ON -DSC_PATH="../supercollider" -DCMAKE_BUILD_TYPE=Release ..
     - name: make
       run: make
     - name: make check
