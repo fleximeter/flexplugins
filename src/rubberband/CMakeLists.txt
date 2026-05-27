@@ -1,6 +1,10 @@
 # Add the RubberBand source
 CPMAddPackage(NAME RUBBERBAND GITHUB_REPOSITORY breakfastquay/rubberband GIT_TAG "v4.0.0")
 add_library(rubberband_lib STATIC ${RUBBERBAND_SOURCE_DIR}/single/RubberBandSingle.cpp)
+if(APPLE)
+    find_library(ACCELERATE_FRAMEWORK Accelerate)
+    target_link_libraries(rubberband_lib ${ACCELERATE_FRAMEWORK})
+endif()
 include_directories(${RUBBERBAND_SOURCE_DIR})
 
 if(WIN32)
