@@ -1,5 +1,5 @@
 /*
-File: rubberband.cpp
+File: rubberband.hpp
 Author: Jeff Martin
 
 Description:
@@ -22,14 +22,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#pragma once
 #include "SC_PlugIn.h"
-#include "rubberBandPS.hpp"
-#include "rubberBandStretcher.hpp"
 
-InterfaceTable *ft;
-
-PluginLoad(RubberBandPlugins) {
-    ft = inTable;
-    DefineDtorUnit(RubberBandPS);
-    DefineDtorUnit(RubberBandStretcher);
-}
+extern InterfaceTable *ft;

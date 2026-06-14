@@ -16,12 +16,25 @@ endif()
 
 # Create the project library
 add_library(rubberband MODULE rubberband.cpp)
-target_link_libraries(rubberband PRIVATE rubberband_lib)
+add_library(rubberBandPS STATIC rubberBandPS.cpp)
+add_library(rubberBandStretcher STATIC rubberBandStretcher.cpp)
 set_target_properties(rubberband_lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(rubberBandPS PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(rubberBandStretcher PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(rubberband PRIVATE 
+    rubberBandPS 
+    rubberBandStretcher
+)
+target_link_libraries(rubberBandPS PRIVATE rubberband_lib)
+target_link_libraries(rubberBandStretcher PRIVATE rubberband_lib)
 
 if(SUPERNOVA)
     add_library(rubberband_supernova MODULE rubberband.cpp)
-    target_link_libraries(rubberband_supernova PRIVATE rubberband_lib)
+    target_link_libraries(rubberband_supernova PRIVATE 
+        rubberband_lib 
+        rubberBandPS 
+        rubberBandStretcher
+    )
     set_property(TARGET rubberband_supernova
                  PROPERTY COMPILE_DEFINITIONS SUPERNOVA)
 endif()
