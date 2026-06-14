@@ -23,7 +23,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #pragma once
-
 #include "SC_Unit.h"
 
 struct PV_CFreeze : public Unit {

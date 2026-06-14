@@ -112,7 +112,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     // This is essential to make sure that subsequent phase calculations are correctly aligned.
     if (unit->m_firstFrame) {
         // Compute the index of the first frame
-        size_t xxi = static_cast<size_t>(std::round<float>(startPos * stftFrames));
+        size_t xxi = static_cast<size_t>(std::round(startPos * stftFrames));
         if (xxi >= stftFrames) {
             if (loop) {
                 xxi = 0;
