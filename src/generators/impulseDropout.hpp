@@ -1,11 +1,11 @@
 /*
-File: rubberband.hpp
+File: impulseDropout.hpp
 Author: Jeff Martin
 
 Description:
-A high quality, formant-preserving live pitch shifter and time stretcher using the RubberBand library.
+The ImpulseDropout UGen
 
-Copyright © 2026 by Jeffrey Martin. All rights reserved.
+Copyright © 2025 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com
 
 This program is free software: you can redistribute it and/or modify
@@ -24,5 +24,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 #include "SC_PlugIn.h"
+#define HEAP_MAX_SIZE 1024
 
-extern InterfaceTable *ft;
+// Represents an ImpulseDropout UGen.
+struct ImpulseDropout : public Unit {
+    double mPhase, mPhaseOffset, mPhaseIncrement;
+    float mFreqMul;
+};
+
+void ImpulseDropout_Ctor(ImpulseDropout* unit);
+void ImpulseDropout_next_aa(ImpulseDropout* unit, int inNumSamples);
+void ImpulseDropout_next_ai(ImpulseDropout* unit, int inNumSamples);
+void ImpulseDropout_next_ak(ImpulseDropout* unit, int inNumSamples);
+void ImpulseDropout_next_ki(ImpulseDropout* unit, int inNumSamples);
+void ImpulseDropout_next_kk(ImpulseDropout* unit, int inNumSamples);

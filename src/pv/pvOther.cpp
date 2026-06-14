@@ -25,6 +25,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pvOther.hpp"
 #include "FFT_UGens.h"
 
+extern InterfaceTable *ft;
+
 void PV_MagSqueeze_next(PV_MagSqueeze *unit, int inNumSamples) {
     PV_GET_BUF
     float low = IN0(1);

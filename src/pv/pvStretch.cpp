@@ -28,6 +28,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "FFT_UGens.h"
 #include <iostream>
 
+extern InterfaceTable *ft;
+
 void PV_PlayBufStretch_Ctor(PV_PlayBufStretch *unit) {
     // Connect to the STFT buffer. For now, we only allow this in the constructor.
     float fbufnum = IN0(1);

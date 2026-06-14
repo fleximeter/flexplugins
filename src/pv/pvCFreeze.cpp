@@ -23,9 +23,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "pvCFreeze.hpp"
-#include "SC_Constants.h"
-#include "SC_InterfaceTable.h"
 #include "FFT_UGens.h"
+
+extern InterfaceTable *ft;
 
 void PV_CFreeze_next(PV_CFreeze *unit, int inNumSamples) {
     PV_GET_BUF
