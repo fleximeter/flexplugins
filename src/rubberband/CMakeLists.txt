@@ -22,7 +22,6 @@ set_target_properties(rubberband_lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(SUPERNOVA)
     add_library(rubberband_supernova MODULE rubberband.cpp)
     target_link_libraries(rubberband_supernova PRIVATE rubberband_lib)
-    set_target_properties(rubberband_lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
     set_property(TARGET rubberband_supernova
                  PROPERTY COMPILE_DEFINITIONS SUPERNOVA)
 endif()
