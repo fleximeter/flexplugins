@@ -1,5 +1,5 @@
 /*
-File: pv.cpp
+File: pvOther.hpp
 Author: Jeff Martin
 
 Description:
@@ -22,18 +22,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_InterfaceTable.h"
-#include "pvCFreeze.hpp"
-#include "pvOther.hpp"
-#include "pvStretch.hpp"
+#pragma once
+#include "SC_Unit.h"
 
-InterfaceTable *ft;
+struct PV_MagSqueeze : public Unit {};
+void PV_MagSqueeze_next(PV_MagSqueeze *unit, int inNumSamples);
+void PV_MagSqueeze_Ctor(PV_MagSqueeze *unit);
 
-PluginLoad(PV_flexplugins) {
-    ft = inTable;
-    DefineSimpleUnit(PV_MagMirror);
-    DefineSimpleUnit(PV_MagSqueeze);
-    DefineSimpleUnit(PV_MagXFade);
-    DefineSimpleUnit(PV_PlayBufStretch);
-    DefineDtorUnit(PV_CFreeze);
-}
+struct PV_MagMirror : public Unit {};
+void PV_MagMirror_next(PV_MagMirror *unit, int inNumSamples);
+void PV_MagMirror_Ctor(PV_MagMirror *unit);
+
+struct PV_MagXFade : public Unit {};
+void PV_MagXFade_next(PV_MagXFade *unit, int inNumSamples);
+void PV_MagXFade_Ctor(PV_MagXFade *unit);
