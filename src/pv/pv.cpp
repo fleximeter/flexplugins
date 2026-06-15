@@ -34,6 +34,6 @@ PluginLoad(PV_flexplugins) {
     DefineSimpleUnit(PV_MagMirror);
     DefineSimpleUnit(PV_MagSqueeze);
     DefineSimpleUnit(PV_MagXFade);
-    DefineSimpleUnit(PV_PlayBufStretch);
+    DefineDtorUnit(PV_PlayBufStretch);
     DefineDtorUnit(PV_CFreeze);
 }

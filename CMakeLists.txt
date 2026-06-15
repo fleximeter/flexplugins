@@ -130,6 +130,7 @@ install(FILES
     src/pv/PV_CFreeze.schelp
     src/pv/PV_MagMirror.schelp
     src/pv/PV_MagSqueeze.schelp
+    src/pv/PV_PlayBufStretch.schelp
     src/pv/PV_MagXFade.schelp
     src/rubberband/RubberBandPS.schelp
     src/rubberband/RubberBandStretcher.schelp

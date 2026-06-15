@@ -23,6 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #pragma once
 #include "SC_Unit.h"
+#include "FFT_UGens.h"
 
 struct PV_PlayBufStretch : public Unit {
     // The index of the buffer with STFT data
@@ -30,6 +31,16 @@ struct PV_PlayBufStretch : public Unit {
 
     // The buffer with STFT data
     SndBuf *m_buf;
+
+    // The most recent output STFT frame
+    SCPolarBuf *m_outFramePrev;
+
+    // The most recent output STFT frame
+    SCPolarBuf *m_frameNext;
+    // The most recent output STFT frame
+    SCPolarBuf *m_framePrev1;
+    // The most recent output STFT frame
+    SCPolarBuf *m_framePrev2;
 
     // Between 0 and 1; represents the start position of playback.
     // If it jumps during playback, playback will be restarted
@@ -47,4 +58,25 @@ struct PV_PlayBufStretch : public Unit {
 };
 
 void PV_PlayBufStretch_Ctor(PV_PlayBufStretch *unit);
+void PV_PlayBufStretch_Dtor(PV_PlayBufStretch *unit);
 void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples);
+void Stretch2(
+    const SCPolarBuf *frame, 
+    const SCPolarBuf *framePrev, 
+    SCPolarBuf *outFrame, 
+    const SCPolarBuf *outFramePrev, 
+    size_t fftSize, 
+    size_t hopSize, 
+    bool phaseLock);
+void Stretch3(
+    const SCPolarBuf *frameNext, 
+    const SCPolarBuf *framePrev1,
+    const SCPolarBuf *framePrev2, 
+    SCPolarBuf *outFrame,
+    const SCPolarBuf *outFramePrev,
+    float pos,
+    size_t fftSize, 
+    size_t hopSize, 
+    bool phaseLock);
+void fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, size_t fftSize);
+void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbins);

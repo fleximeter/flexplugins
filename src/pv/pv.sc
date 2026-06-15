@@ -75,7 +75,7 @@ PV_MagXFade : PV_ChainUGen {
 // A phase vocoder buffer player
 PV_PlayBufStretch : PV_ChainUGen {
     *new {
-        arg buffer, stftBuffer, startPos, rate, loop=0.0, doneAction=0;
-        ^this.multiNew('control', buffer, stftBuffer, startPos, rate, loop, doneAction);
+        arg buffer, stftBuffer, startPos=0.0, rate=1.0, phaseLock=1.0, loop=0.0, doneAction=0;
+        ^this.multiNew('control', buffer, stftBuffer, startPos, rate, phaseLock, loop, doneAction);
     }
 }

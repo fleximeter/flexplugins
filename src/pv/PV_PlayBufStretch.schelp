@@ -1,0 +1,55 @@
+class:: PV_PlayBufStretch
+summary:: Phase vocoder buffer player for time stretching
+related:: Classes/PV_RecordBuf, Classes/PV_BufRd
+categories:: Libraries>FlexUGens, UGens>FFT
+related:: Guides/FFT-Overview
+
+Description::
+
+PV_PlayBufStretch is a phase vocoder buffer player for time stretching.
+
+classmethods::
+
+method::new
+
+argument::buffer
+The FFT buffer
+
+argument::stftBuffer
+The buffer with STFT data created by PV_RecordBuf
+
+argument::startPos
+The start position (0.0 to 1.0). Normally you would set this once and let it be. 
+However, you can change it at any time--if it changes, playback will jump immediately 
+to the new start position. Keep in mind that the first frame played does not use phase 
+vocoder computation, so you may or may not like the sound this produces.
+
+argument::rate
+The playback rate. 1.0 is normal; slower rates result in a time stretch, and faster rates result in time shrink. Negative rates result in backwards playback.
+
+argument::phaseLock
+Whether (1.0) or not (0.0) to apply phase locking. Phase locking is used to avoid the "phasy" sound 
+of a phase vocoder which happens when adjacent bins drift out of sync with each other. 
+Phase locking produces a cleaner sound.
+
+argument::loop
+Whether or not to loop when the end of the stftBuffer is reached
+
+argument::doneAction
+The action to take after playback is completed
+
+Examples::
+
+code::
+{
+    var sig, chain1, chain2;
+    sig = SoundIn.ar(0);
+    chain1 = FFT(LocalBuf(2048), sig);
+	chain1 = PV_MagAbove(chain1, 0.5);
+    chain2 = PV_MagSqueeze(chain1, 0.5, 1.4);
+    chain1 = PV_MagXFade(chain1, chain2, 0.5);
+    sig = IFFT(chain1);
+    sig = Pan2.ar(sig);
+    Out.ar(0, sig);
+}.play;
+::

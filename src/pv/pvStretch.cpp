@@ -24,9 +24,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "pvStretch.hpp"
 #include "SC_Constants.h"
-#include "SC_InterfaceTable.h"
-#include "FFT_UGens.h"
 #include <iostream>
+#include <complex>
+#define INTERP(a, b, pos) (a + (b-a) * pos)
 
 extern InterfaceTable *ft;
 
@@ -37,6 +37,10 @@ void PV_PlayBufStretch_Ctor(PV_PlayBufStretch *unit) {
     if (bufnum >= unit->mWorld->mNumSndBufs) bufnum = 0;
     unit->m_fbufnum = fbufnum;
     unit->m_buf = unit->mWorld->mSndBufs + bufnum;
+    unit->m_outFramePrev = nullptr;
+    unit->m_frameNext = nullptr;
+    unit->m_framePrev1 = nullptr;
+    unit->m_framePrev2 = nullptr;
     
     // Configure position
     float startPos = sc_clip<float>(IN0(2), 0.0, 1.0);
@@ -48,11 +52,30 @@ void PV_PlayBufStretch_Ctor(PV_PlayBufStretch *unit) {
     OUT0(0) = IN0(0);
 }
 
+void PV_PlayBufStretch_Dtor(PV_PlayBufStretch *unit) {
+    if (unit->m_outFramePrev) {
+        RTFree(unit->mWorld, unit->m_outFramePrev);
+    }
+    if (unit->m_frameNext) {
+        RTFree(unit->mWorld, unit->m_frameNext);
+    }
+    if (unit->m_framePrev1) {
+        RTFree(unit->mWorld, unit->m_framePrev1);
+    }
+    if (unit->m_framePrev2) {
+        RTFree(unit->mWorld, unit->m_framePrev2);
+    }
+}
+
 void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     PV_GET_BUF
     float startPos = sc_clip<float>(IN0(2), 0.0, 1.0);
     float rate = IN0(3);
     float loop = IN0(4);
+    bool phaseLock = false;
+    if (IN0(5) != 0.f) {
+        phaseLock = true;
+    }
 
     // This section of the code is for acquiring the STFT buffer and information about it.
     // It has to be run every time because we cannot be sure the user has not freed the buffer.
@@ -103,12 +126,40 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
         return;
     }
 
+    // The first time through, we need to allocate the SCPolarBuf storage in the UGen.
+    if (!unit->m_outFramePrev) {
+        // This is an annoying way to have to allocate memory,
+        // but it seems to be necessary based on how SCPolarBuf is defined.
+        float *outFramePrev = (float*)RTAlloc(unit->mWorld, stftBufFftSize * sizeof(float));
+        float *frameNext = (float*)RTAlloc(unit->mWorld, stftBufFftSize * sizeof(float));
+        float *framePrev1 = (float*)RTAlloc(unit->mWorld, stftBufFftSize * sizeof(float));
+        float *framePrev2 = (float*)RTAlloc(unit->mWorld, stftBufFftSize * sizeof(float));
+        unit->m_outFramePrev = (SCPolarBuf*)outFramePrev;
+        unit->m_frameNext = (SCPolarBuf*)frameNext;
+        unit->m_framePrev1 = (SCPolarBuf*)framePrev1;
+        unit->m_framePrev2 = (SCPolarBuf*)framePrev2;
+    }
+
     if (startPos != unit->m_startPos) {
         unit->m_startPos = startPos;
         unit->m_firstFrame = true;
     }
 
     // Now that we've run setup, we're ready to read STFT data and perform phase vocoder stretching.
+
+    // First we need to figure out where we are, and if that means we need to loop or quit.
+    float newPos = unit->m_pos + 1/rate;
+    if (newPos > stftFrames - 1) {
+        if (loop) {
+            unit->m_firstFrame = true;
+            startPos = 0;
+        } else {
+            OUT0(0) = -1.f;
+            RELEASE_SNDBUF_SHARED(stftBuf);
+            DoneAction(static_cast<int>(IN0(5)), unit);
+            return;
+        }
+    }
 
     // The first frame has to be cloned directly from the STFT buffer with no phase adjustments.
     // This is essential to make sure that subsequent phase calculations are correctly aligned.
@@ -129,26 +180,242 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
         // Copy the FFT data over
         SCPolarBuf *p = ToPolarApx(buf);
         const float *currentFftFrame = stftData + (xxi * stftBufFftSize);
-        p->dc = currentFftFrame[0];
-        p->nyq = currentFftFrame[1];
-        for (size_t xxn = 2, xxk = 0; xxn < stftBufFftSize; xxn+=2, xxk++) {
-            // For some reason the phase is stored first, then the magnitude.
-            // This prevents a direct cast to SCPolarBuf, unfortunately.
-            p->bin[xxk].phase = currentFftFrame[xxn];
-            p->bin[xxk].mag = currentFftFrame[xxn+1];
-        }
+        // Fill the output buffer
+        fillPolarBuf(currentFftFrame, p, stftBufFftSize);
+        // We also need to log the output to the UGen
+        fillPolarBuf(currentFftFrame, unit->m_outFramePrev, stftBufFftSize);
 
         // We have to advance by one frame because we need to be able to compute frequency for time stretching.
         unit->m_pos = static_cast<float>(xxi + 1);
+        unit->m_firstFrame = false;
     }
     
     // For frames other than the first frame, we'll need to perform phase computation.
     else {
-        float newPos;
+        SCPolarBuf *p = ToPolarApx(buf);
+        if (std::abs(std::round(newPos)-newPos) < 1e-3) {
+            size_t pos = static_cast<size_t>(std::round(newPos));
+            size_t lpos = pos - 1;
+            fillPolarBuf(stftData + (pos * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
+            fillPolarBuf(stftData + (pos * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
+            Stretch2(
+                unit->m_frameNext, 
+                unit->m_framePrev1, 
+                p, 
+                unit->m_outFramePrev, 
+                stftBufFftSize, 
+                stftBufHopSize, 
+                phaseLock
+            );
+        } else {
+            size_t lo = static_cast<size_t>(std::floor(newPos));
+            size_t hi = static_cast<size_t>(std::ceil(newPos));
+            fillPolarBuf(stftData + (hi * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
+            fillPolarBuf(stftData + (lo * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
+            fillPolarBuf(stftData + ((lo-1) * stftBufFftSize), unit->m_framePrev2, stftBufFftSize);
+            Stretch3(
+                unit->m_frameNext, 
+                unit->m_framePrev1, 
+                unit->m_framePrev2, 
+                p, 
+                unit->m_outFramePrev, 
+                newPos, 
+                stftBufFftSize, 
+                stftBufHopSize, 
+                phaseLock
+            );
+        }
+        copyPolarBuf(p, unit->m_outFramePrev, static_cast<size_t>(numbins));
+        unit->m_pos = newPos;
     }
 
     RELEASE_SNDBUF_SHARED(stftBuf);
+}
 
-    // if no loop and we're past the last frame, handle this condition later
-    // DoneAction(static_cast<int>(IN0(5)), unit);
+/// Computes a single frame of STFT data for time stretching.
+/// The assumption is that we are positioned exactly at `frame`, and we therefore
+/// just need framePrev to compute the instantaneous frequency. We also do not
+/// need to perform any magnitude or frequency interpolation.
+///
+/// \param frame The current STFT frame
+/// \param framePrev The previous STFT frame
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+/// \param phaseLock Whether or not to apply phase locking
+void Stretch2(
+    const SCPolarBuf *frame, 
+    const SCPolarBuf *framePrev, 
+    SCPolarBuf *outFrame, 
+    const SCPolarBuf *outFramePrev, 
+    size_t fftSize, 
+    size_t hopSize, 
+    bool phaseLock) {
+    outFrame->dc = frame->dc;
+    outFrame->nyq = frame->nyq;
+    for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
+        outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+
+        // Puckette-style phase locking
+        if (phaseLock) {
+            // Compute the instantaneous frequency
+            float omegaK = twopi * (xxk+1) / fftSize;
+            float phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            float instantaneousFreq = omegaK + phaseInc/hopSize;
+
+            // In Puckette-style phase locking, we make a substitution for the previous phase,
+            // in order to "lock" phases of adjacent bins together.
+            float prevPhase = 0.0;
+            if (xxk == 0) {
+                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->dc, 0.f);
+                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            } else if (xxk == fftSize/2-2) {
+                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->nyq, 0.f);
+                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            } else {
+                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            }
+            
+            // Compute the new phase
+            outFrame->bin[xxk].phase = prevPhase + hopSize * instantaneousFreq;
+        } else {
+            // Compute the instantaneous frequency
+            float omegaK = twopi * (xxk+1) / fftSize;
+            float phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            float instantaneousFreq = omegaK + phaseInc/hopSize;
+            
+            // Compute the new phase
+            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        }
+    }
+}
+
+/// Computes a single frame of STFT data for time stretching.
+/// The assumption is that we are positioned between framePrev1 and frameNext.
+/// This means we will need to interpolate frequency data. So we will need to
+/// compute two frequencies for each bin, and that means we need three STFT frames.
+///
+/// \param frameNext The next STFT frame
+/// \param framePrev1 The previous STFT frame
+/// \param framePrev2 The previous STFT frame before that (required for instantaneous frequency interpolation)
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+/// \param phaseLock Whether or not to apply phase locking
+void Stretch3(
+    const SCPolarBuf *frameNext, 
+    const SCPolarBuf *framePrev1,
+    const SCPolarBuf *framePrev2, 
+    SCPolarBuf *outFrame,
+    const SCPolarBuf *outFramePrev,
+    float pos,
+    size_t fftSize, 
+    size_t hopSize, 
+    bool phaseLock) {
+    outFrame->dc = INTERP(framePrev1->dc, frameNext->dc, pos);
+    outFrame->nyq = INTERP(framePrev1->nyq, frameNext->nyq, pos);
+    for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
+        outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+
+        // Puckette-style phase locking
+        if (phaseLock) {
+            float omegaK = twopi * (xxk+1) / fftSize;
+
+            // Compute the next instantaneous frequency
+            float phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            float instantaneousFreqNext = omegaK + phaseInc/hopSize;
+
+            // Compute the previous instantaneous frequency
+            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
+
+            // Interpolate the instantaneous frequency
+            float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+
+            // In Puckette-style phase locking, we make a substitution for the previous phase,
+            // in order to "lock" phases of adjacent bins together.
+            float prevPhase = 0.0;
+            if (xxk == 0) {
+                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->dc, 0.f);
+                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            } else if (xxk == fftSize/2-2) {
+                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->nyq, 0.f);
+                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            } else {
+                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            }
+            
+            // Compute the new phase
+            outFrame->bin[xxk].phase = prevPhase + hopSize * instantaneousFreq;
+        } else {
+            float omegaK = twopi * (xxk+1) / fftSize;
+
+            // Compute the next instantaneous frequency
+            float phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            float instantaneousFreqNext = omegaK + phaseInc/hopSize;
+
+            // Compute the previous instantaneous frequency
+            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
+
+            // Interpolate the instantaneous frequency
+            float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+            
+            // Compute the new phase
+            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        }
+    }
+}
+
+/// Fills a SCPolarBuf with saved STFT data from a single frame
+///
+/// \param fftBuf The FFT frame from the STFT buffer
+/// \param [out] polarBuf The SCPolarBuf to copy to
+/// \param fftSize The FFT size
+void fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, size_t fftSize) {
+    polarBuf->dc = fftBuf[0];
+    polarBuf->nyq = fftBuf[1];
+    for (size_t xxn = 2, xxk = 0; xxn < fftSize; xxn+=2, xxk++) {
+        // For some reason the phase is stored first, then the magnitude.
+        // This prevents a direct cast to SCPolarBuf, unfortunately.
+        polarBuf->bin[xxk].phase = fftBuf[xxn];
+        polarBuf->bin[xxk].mag = fftBuf[xxn+1];
+    }
+}
+
+/// Copies data from one SCPolarBuf to another
+///
+/// \param sourceBuf The source buffer
+/// \param [out] destBuf The destination buffer
+/// \param numbins The number of bins in the SCPolarBuf (fftSize/2-1)
+void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbins) {
+    destBuf->dc = sourceBuf->dc;
+    destBuf->nyq = sourceBuf->nyq;
+    for (size_t xxn = 0; xxn < numbins; xxn++) {
+        destBuf->bin[xxn].mag = sourceBuf->bin[xxn].mag;
+        destBuf->bin[xxn].phase = sourceBuf->bin[xxn].phase;
+    }
 }
