@@ -25,41 +25,62 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "SC_Unit.h"
 #include "FFT_UGens.h"
 
+/// Stores the state of a PV_PlayBufStretch UGen instance
 struct PV_PlayBufStretch : public Unit {
-    // The index of the buffer with STFT data
+    /// The index of the buffer with STFT data
     float m_fbufnum;
 
-    // The buffer with STFT data
+    /// The buffer with STFT data
     SndBuf *m_buf;
 
-    // The most recent output STFT frame
+    /// The most recent output STFT frame
     SCPolarBuf *m_outFramePrev;
 
-    // The most recent output STFT frame
+    /// The next STFT frame after the current position
     SCPolarBuf *m_frameNext;
-    // The most recent output STFT frame
+    
+    /// The STFT frame right before the current position
     SCPolarBuf *m_framePrev1;
-    // The most recent output STFT frame
+    
+    /// The STFT frame two positions before the current position
     SCPolarBuf *m_framePrev2;
 
-    // Between 0 and 1; represents the start position of playback.
-    // If it jumps during playback, playback will be restarted
-    // at the new m_startPos.
+    /// Between 0 and 1; represents the start position of playback.
+    /// If it jumps during playback, playback will be restarted
+    /// at the new m_startPos.
     float m_startPos;
     
-    // A fractional STFT frame index. Unlike m_startPos, it corresponds to the 
-    // integer index of the current STFT frame (from 0 to M-1).
-    // Used for interpolating position.
+    /// A fractional STFT frame index. Unlike m_startPos, it corresponds to the 
+    /// integer index of the current STFT frame (from 0 to M-1).
+    /// Used for interpolating position.
     float m_pos;
 
-    // For the first frame, we need to read phase data directly
-    // instead of computing it.
+    /// For the first frame, we need to read phase data directly
+    /// instead of computing it.
     bool m_firstFrame;
 };
 
+/// Initializes a new PV_PlayBufStretch UGen
 void PV_PlayBufStretch_Ctor(PV_PlayBufStretch *unit);
+
+/// Frees memory created by the PV_PlayBufStretch UGen
 void PV_PlayBufStretch_Dtor(PV_PlayBufStretch *unit);
+
+/// Computes the next FFT frame requested by the PV_PlayBufStretch UGen
 void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples);
+
+/// Computes a single frame of STFT data for time stretching.
+/// The assumption is that we are positioned exactly at `frame`, and we therefore
+/// just need framePrev to compute the instantaneous frequency. We also do not
+/// need to perform any magnitude or frequency interpolation.
+///
+/// \param frame The current STFT frame
+/// \param framePrev The previous STFT frame
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+/// \param phaseLock Whether or not to apply phase locking
 void Stretch2(
     const SCPolarBuf *frame, 
     const SCPolarBuf *framePrev, 
@@ -68,6 +89,21 @@ void Stretch2(
     size_t fftSize, 
     size_t hopSize, 
     bool phaseLock);
+
+/// Computes a single frame of STFT data for time stretching.
+/// The assumption is that we are positioned between framePrev1 and frameNext.
+/// This means we will need to interpolate frequency data. So we will need to
+/// compute two frequencies for each bin, and that means we need three STFT frames.
+///
+/// \param frameNext The next STFT frame
+/// \param framePrev1 The previous STFT frame
+/// \param framePrev2 The previous STFT frame before that (required for instantaneous frequency interpolation)
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+/// \param phaseLock Whether or not to apply phase locking
 void Stretch3(
     const SCPolarBuf *frameNext, 
     const SCPolarBuf *framePrev1,
@@ -78,5 +114,17 @@ void Stretch3(
     size_t fftSize, 
     size_t hopSize, 
     bool phaseLock);
+
+/// Fills a SCPolarBuf with saved STFT data from a single frame
+///
+/// \param fftBuf The FFT frame from the STFT buffer
+/// \param [out] polarBuf The SCPolarBuf to copy to
+/// \param fftSize The FFT size
 void fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, size_t fftSize);
+
+/// Copies data from one SCPolarBuf to another
+///
+/// \param sourceBuf The source buffer
+/// \param [out] destBuf The destination buffer
+/// \param numbins The number of bins in the SCPolarBuf (fftSize/2-1)
 void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbins);
