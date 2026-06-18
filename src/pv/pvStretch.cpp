@@ -107,8 +107,9 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
 
     // Basic information
     size_t stftBufFftSize = bufData[0];
-    size_t stftBufHopSize = static_cast<float>(bufData[1] * stftBufFftSize);  // in frames, not fraction
+    size_t stftBufHopSize = static_cast<size_t>(bufData[1] * stftBufFftSize);  // in frames, not fraction
     int stftBufWinType = static_cast<int>(bufData[2]);  // -1, 0, or 1. This information is probably extraneous.
+    // std::cout << "FFT size: " << stftBufFftSize << " Hop size: " << stftBufHopSize << " Win type: " << stftBufWinType << " STFT frames " << stftFrames << "\n";
 
     if (stftBufFftSize != buf->samples) {
         OUT0(0) = -1.f;
@@ -135,17 +136,19 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     
     float startPos = sc_clip<float>(IN0(2), 0.0, 1.0);
     float rate = IN0(3);
-    float loop = IN0(4);
+    float loop = IN0(5);
+    // std::cout << "Rate: " << rate << " Loop: " << loop << "\n";
 
     if (startPos != unit->m_startPos) {
         unit->m_startPos = startPos;
         unit->m_firstFrame = true;
+        // std::cout << "Start pos changed\n";
     }
 
     // Now that we've run setup, we're ready to read STFT data and perform phase vocoder stretching.
 
     // First we need to figure out where we are, and if that means we need to loop or quit.
-    float newPos = unit->m_pos + 1/rate;
+    float newPos = unit->m_pos + rate;
     if (newPos > stftFrames - 1) {
         if (loop) {
             unit->m_firstFrame = true;
@@ -193,11 +196,13 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     // For frames other than the first frame, we'll need to perform phase computation.
     else {
         bool phaseLock = false;
-        if (IN0(5) != 0.f) {
+        if (IN0(4) != 0.f) {
             phaseLock = true;
+            // std::cout << "Phase lock\n";
         }
         SCPolarBuf *p = ToPolarApx(buf);
         size_t ipos = static_cast<size_t>(std::round(newPos));
+        std::cout << "New pos: " << ipos << "\n";
         if (std::abs(ipos-newPos) < 1e-3) {
             // If we're right smack on a specific FFT frame, we don't
             // need to do any magnitude or frequency interpolation, so
