@@ -109,7 +109,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     size_t stftBufFftSize = bufData[0];
     size_t stftBufHopSize = static_cast<size_t>(bufData[1] * stftBufFftSize);  // in frames, not fraction
     int stftBufWinType = static_cast<int>(bufData[2]);  // -1, 0, or 1. This information is probably extraneous.
-    // std::cout << "FFT size: " << stftBufFftSize << " Hop size: " << stftBufHopSize << " Win type: " << stftBufWinType << " STFT frames " << stftFrames << "\n";
+    //std::cout << "FFT size: " << stftBufFftSize << " Hop size: " << stftBufHopSize << " Win type: " << stftBufWinType << " STFT frames " << stftFrames << "\n";
 
     if (stftBufFftSize != buf->samples) {
         OUT0(0) = -1.f;
@@ -201,15 +201,15 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             // std::cout << "Phase lock\n";
         }
         SCPolarBuf *p = ToPolarApx(buf);
-        size_t ipos = static_cast<size_t>(std::round(newPos));
-        std::cout << "New pos: " << ipos << "\n";
-        if (std::abs(ipos-newPos) < 1e-3) {
+        size_t intPos = static_cast<size_t>(std::round(newPos));
+        //std::cout << "New pos: " << intPos << "\n";
+        if (std::abs(intPos-newPos) < 1e-3) {
             // If we're right smack on a specific FFT frame, we don't
             // need to do any magnitude or frequency interpolation, so
             // we only need the current and previous FFT frames from the buffer.
-            size_t lpos = ipos - 1;
-            fillPolarBuf(stftData + (ipos * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
-            fillPolarBuf(stftData + (ipos * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
+            size_t lastPos = intPos - 1;
+            fillPolarBuf(stftData + (intPos * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
+            fillPolarBuf(stftData + (lastPos * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
             // Render the output FFT frame
             Stretch2(
                 unit->m_frameNext, 
@@ -237,7 +237,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
                 unit->m_framePrev2, 
                 p, 
                 unit->m_outFramePrev, 
-                newPos, 
+                newPos-static_cast<float>(lo), 
                 stftBufFftSize, 
                 stftBufHopSize, 
                 phaseLock
