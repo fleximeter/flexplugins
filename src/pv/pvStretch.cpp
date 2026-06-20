@@ -653,10 +653,9 @@ static void Stretch3LarocheDolson(
     }
 
     // Acquire peaks
-    std::vector<size_t> peaks;
     peakFinder->analyze(cframe);
 
-    if (peaks.size() == 0) {
+    if (peakFinder->size() == 0) {
         // No phase locking if no peaks were acquired
         for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
             outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
@@ -726,7 +725,7 @@ static void Stretch3LarocheDolson(
             outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
         }
         
-        for (size_t xxn = 0; xxn < peaks.size(); xxn++) {
+        for (size_t xxn = 0; xxn < peakFinder->size(); xxn++) {
             // First we compute the new phase for the peak bin as usual
             Peak peak = peakFinder->peaks[xxn];
             outFrame->bin[peak.peak].mag = INTERP(framePrev1->bin[peak.peak].mag, frameNext->bin[peak.peak].mag, pos);
