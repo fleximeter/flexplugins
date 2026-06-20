@@ -35,7 +35,8 @@ argument::startPos
 The start position (0.0 to 1.0). Normally you would set this once and let it be. 
 However, you can change it at any time--if it changes, playback will jump immediately 
 to the new start position. Keep in mind that the first frame played does not use phase 
-vocoder computation, so you may or may not like the sound this produces.
+vocoder computation, so you may or may not like the sound produced by changing the 
+start position during playback.
 
 This value is clipped internally to the range [0.0, 1.0].
 
@@ -53,7 +54,9 @@ phase locking, and 2.0 means Laroche/Dolson identity phase locking.
 argument::peakRadius
 The radius for the peak-picker in the Laroche/Dolson identity phase locking 
 algorithm. A bin is a peak if its magnitude is greater than any magnitude of the 
-strong::peakRadius:: bins to either side. 
+strong::peakRadius:: bins to either side. This parameter can only be set on construction, 
+and is clipped internally to the range [1, 32]. Laroche and Dolson suggest a radius of 2, 
+which is the default here.
 
 argument::doneAction
 The action to take after playback is completed
@@ -83,11 +86,13 @@ SynthDef(\rec, {
 }).add;
 
 SynthDef(\play2, {
-	arg recBuf, rate=1, phaseLock=0, loop=0;
+	arg recBuf, rate=1, phaseLock=0, loop=0, startPos=0;
 	var sig, chain;
 	// Note that you must specify the appropriate hop size in FFTTrigger.
+	// Also note that the FFT size must be the same as the FFT size of
+	// the original analysis.
 	chain = FFTTrigger(LocalBuf(2048), 0.25, 1.0);
-	chain = PV_PlayBufStretch(chain, recBuf, 0.0, rate, loop, phaseLock, 2.0, Done.freeSelf);
+	chain = PV_PlayBufStretch(chain, recBuf, startPos, rate, loop, phaseLock, 2.0, Done.freeSelf);
 	// Use the same window type that was used for analysis.
 	sig = IFFT(chain, 1);
 	Out.ar(0, Pan2.ar(sig));
@@ -95,5 +100,27 @@ SynthDef(\play2, {
 )
 
 Synth(\rec, [\recBuf, y, \soundBuf, z]);
-b = Synth(\play2, [\recBuf, y, \rate, 0.4, \loop, 1.0, \phaseLock, 2.0]);
+b = Synth(\play2, [\recBuf, y, \rate, 0.5, \loop, 1.0, \startPos, 0.0, \phaseLock, 2.0]);
+
+// A more unusual take. Here we modulate the playback rate, and it can go negative.
+(
+{
+	var sig, chain;
+	chain = FFTTrigger(LocalBuf(2048), 0.25, 1.0);
+	chain = PV_PlayBufStretch(chain, y, 0.0, LFTri.kr(0.1), 1.0, 0.0);
+	sig = IFFT(chain, 1);
+	sig = Pan2.ar(sig);
+}.play;
+)
+
+// Another unusual take, where we abruptly change the playback start point repeatedly.
+(
+{
+	var sig, chain;
+	chain = FFTTrigger(LocalBuf(2048), 0.25, 1.0);
+	chain = PV_PlayBufStretch(chain, y, LFPulse.kr(0.25).range(0.2, 0.6), 0.25, 1.0, 0.0);
+	sig = IFFT(chain, 1);
+	sig = Pan2.ar(sig);
+}.play;
+)
 ::

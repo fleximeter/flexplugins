@@ -43,8 +43,9 @@ void PV_PlayBufStretch_Ctor(PV_PlayBufStretch *unit) {
     unit->m_frameNext = nullptr;
     unit->m_framePrev1 = nullptr;
     unit->m_framePrev2 = nullptr;
+    size_t peakRadius = static_cast<size_t>(sc_clip(IN0(6), 1.f, 32.f));
     unit->m_peakFinder = (PeakFinder*)RTAlloc(unit->mWorld, sizeof(PeakFinder));
-    new (unit->m_peakFinder) PeakFinder(static_cast<size_t>(buf->samples), 2);
+    new (unit->m_peakFinder) PeakFinder(static_cast<size_t>(buf->samples), peakRadius);
     unit->m_peakFinder->memLoad(RTAlloc(unit->mWorld, unit->m_peakFinder->memSize()));
     
     // Configure position
@@ -148,7 +149,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     
     float startPos = sc_clip<float>(IN0(2), 0.0, 1.0);
     const float rate = IN0(3);
-    const float loop = IN0(5);
+    const float loop = IN0(4);
     // std::cout << "Rate: " << rate << " Loop: " << loop << "\n";
 
     if (startPos != unit->m_startPos) {
@@ -160,15 +161,32 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     // Now that we've run setup, we're ready to read STFT data and perform phase vocoder stretching.
 
     // First we need to figure out where we are, and if that means we need to loop or quit.
-    const float newPos = unit->m_pos + rate;
+    float newPos = unit->m_pos + rate;
+    float debugNewPos = newPos;
     if (newPos > stftFrames - 1) {
-        if (loop) {
+        if (loop && rate > 0) {
             unit->m_firstFrame = true;
             startPos = 0;
+        } else if (rate <= 0) {
+            // clip it to the last possible frame if we're working backwards
+            newPos = stftFrames - 1;
         } else {
             OUT0(0) = -1.f;
             RELEASE_SNDBUF_SHARED(stftBuf);
-            DoneAction(static_cast<int>(IN0(6)), unit);
+            DoneAction(static_cast<int>(IN0(7)), unit);
+            return;
+        }
+    } else if (newPos < 0) {
+        if (loop && rate < 0) {
+            unit->m_firstFrame = true;
+            startPos = 1;
+        } else if (rate >= 0) {
+            // clip it to the first frame if we're working forwards
+            newPos = 0;
+        } else {
+            OUT0(0) = -1.f;
+            RELEASE_SNDBUF_SHARED(stftBuf);
+            DoneAction(static_cast<int>(IN0(7)), unit);
             return;
         }
     }
@@ -177,18 +195,8 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     // This is essential to make sure that subsequent phase calculations are correctly aligned.
     if (unit->m_firstFrame) {
         // Compute the index of the first frame
-        size_t firstFrameIdx = static_cast<size_t>(std::round(startPos * stftFrames));
-        if (firstFrameIdx >= stftFrames) {
-            if (loop) {
-                firstFrameIdx = 0;
-            } else {
-                OUT0(0) = -1.f;
-                RELEASE_SNDBUF_SHARED(stftBuf);
-                DoneAction(static_cast<int>(IN0(6)), unit);
-                return;
-            }
-        }
-
+        size_t firstFrameIdx = static_cast<size_t>(std::round(startPos * (stftFrames-1)));
+        
         // Copy the FFT data over
         SCPolarBuf *p = ToPolarApx(buf);
         const float *currentFftFrame = stftData + (firstFrameIdx * stftBufFftSize);
@@ -207,15 +215,20 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     
     // For frames other than the first frame, we'll need to perform phase computation.
     else {
-        size_t phaseLock = sc_clip(static_cast<size_t>(IN0(4)), 0, 2);
+        size_t phaseLock = sc_clip(static_cast<size_t>(IN0(5)), 0, 2);
         SCPolarBuf *p = ToPolarApx(buf);
         size_t roundedPos = static_cast<size_t>(std::round(newPos));
         //std::cout << "New pos: " << intPos << "\n";
+        // If we're right smack on a specific FFT frame, we don't
+        // need to do any magnitude or frequency interpolation, so
+        // we only need the current and previous FFT frames from the buffer.
         if (std::abs(roundedPos-newPos) < 1e-3) {
-            // If we're right smack on a specific FFT frame, we don't
-            // need to do any magnitude or frequency interpolation, so
-            // we only need the current and previous FFT frames from the buffer.
-            size_t lastPos = roundedPos - 1;
+            size_t lastPos = rate >= 0 ? roundedPos - 1 : roundedPos + 1;
+            if (lastPos < 0) {
+                lastPos = roundedPos + 1;
+            } else if (lastPos >= stftFrames) {
+                lastPos = roundedPos - 1;
+            }
             fillPolarBuf(stftData + (roundedPos * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
             fillPolarBuf(stftData + (lastPos * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
             // Render the output FFT frame
@@ -256,13 +269,23 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
         } else {
             // Otherwise we're between two FFT frames, and we're going to have to
             // interpolate magnitude and frequency data.
-            size_t lo = static_cast<size_t>(std::floor(newPos));
-            size_t hi = static_cast<size_t>(std::ceil(newPos));
+            size_t lo, hi, loprev;
+            if (rate >= 0) {                
+                lo = static_cast<size_t>(std::floor(newPos));
+                hi = static_cast<size_t>(std::ceil(newPos));
+                loprev = lo == 0 ? 0 : lo - 1;
+            } else {
+                hi = static_cast<size_t>(std::floor(newPos));
+                lo = static_cast<size_t>(std::ceil(newPos));
+                loprev = lo + 1;
+                if (loprev >= stftFrames) loprev = lo;
+            }
+
             // We are in between these two frames
             fillPolarBuf(stftData + (hi * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
             fillPolarBuf(stftData + (lo * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
             // This is the frame right before that. It's needed to compute the previous instantaneous frequencies.
-            fillPolarBuf(stftData + ((lo-1) * stftBufFftSize), unit->m_framePrev2, stftBufFftSize);
+            fillPolarBuf(stftData + (loprev * stftBufFftSize), unit->m_framePrev2, stftBufFftSize);
             // Render the output FFT frame
             switch (phaseLock) {
                 case 1:
