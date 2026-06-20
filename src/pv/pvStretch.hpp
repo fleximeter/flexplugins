@@ -84,15 +84,34 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples);
 /// \param outFramePrev The previously computed output STFT frame
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-/// \param phaseLock Whether or not to apply phase locking
 void Stretch2(
     const SCPolarBuf *frame, 
     const SCPolarBuf *framePrev, 
     SCPolarBuf *outFrame, 
     const SCPolarBuf *outFramePrev, 
     size_t fftSize, 
-    size_t hopSize, 
-    bool phaseLock);
+    size_t hopSize);
+
+/// Computes a single frame of STFT data for time stretching.
+/// The assumption is that we are positioned exactly at `frame`, and we therefore
+/// just need framePrev to compute the instantaneous frequency. We also do not
+/// need to perform any magnitude or frequency interpolation.
+///
+/// This version uses Miller Puckette's phase locking.
+///
+/// \param frame The current STFT frame
+/// \param framePrev The previous STFT frame
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+void Stretch2Puckette(
+    const SCPolarBuf *frame, 
+    const SCPolarBuf *framePrev, 
+    SCPolarBuf *outFrame, 
+    const SCPolarBuf *outFramePrev, 
+    size_t fftSize, 
+    size_t hopSize);
 
 /// Computes a single frame of STFT data for time stretching.
 /// The assumption is that we are positioned between framePrev1 and frameNext.
@@ -107,7 +126,6 @@ void Stretch2(
 /// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-/// \param phaseLock Whether or not to apply phase locking
 void Stretch3(
     const SCPolarBuf *frameNext, 
     const SCPolarBuf *framePrev1,
@@ -116,8 +134,32 @@ void Stretch3(
     const SCPolarBuf *outFramePrev,
     float pos,
     size_t fftSize, 
-    size_t hopSize, 
-    bool phaseLock);
+    size_t hopSize);
+
+/// Computes a single frame of STFT data for time stretching.
+/// The assumption is that we are positioned between framePrev1 and frameNext.
+/// This means we will need to interpolate frequency data. So we will need to
+/// compute two frequencies for each bin, and that means we need three STFT frames.
+///
+/// This version uses Miller Puckette's phase locking.
+///
+/// \param frameNext The next STFT frame
+/// \param framePrev1 The previous STFT frame
+/// \param framePrev2 The previous STFT frame before that (required for instantaneous frequency interpolation)
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+void Stretch3Puckette(
+    const SCPolarBuf *frameNext, 
+    const SCPolarBuf *framePrev1,
+    const SCPolarBuf *framePrev2, 
+    SCPolarBuf *outFrame,
+    const SCPolarBuf *outFramePrev,
+    float pos,
+    size_t fftSize, 
+    size_t hopSize);
 
 /// Fills a SCPolarBuf with saved STFT data from a single frame
 ///

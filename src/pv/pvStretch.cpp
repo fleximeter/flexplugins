@@ -207,11 +207,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     
     // For frames other than the first frame, we'll need to perform phase computation.
     else {
-        bool phaseLock = false;
-        if (IN0(4) != 0.f) {
-            phaseLock = true;
-            // std::cout << "Phase lock\n";
-        }
+        size_t phaseLock = sc_clip(static_cast<size_t>(IN0(4)), 0, 2);
         SCPolarBuf *p = ToPolarApx(buf);
         size_t roundedPos = static_cast<size_t>(std::round(newPos));
         //std::cout << "New pos: " << intPos << "\n";
@@ -223,15 +219,27 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             fillPolarBuf(stftData + (roundedPos * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
             fillPolarBuf(stftData + (lastPos * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
             // Render the output FFT frame
-            Stretch2(
-                unit->m_frameNext, 
-                unit->m_framePrev1, 
-                p, 
-                unit->m_outFramePrev, 
-                stftBufFftSize, 
-                stftBufHopSize, 
-                phaseLock
-            );
+            switch (phaseLock) {
+                case 1:
+                    Stretch2Puckette(
+                        unit->m_frameNext, 
+                        unit->m_framePrev1, 
+                        p, 
+                        unit->m_outFramePrev, 
+                        stftBufFftSize, 
+                        stftBufHopSize
+                    );
+                    break;
+                default:
+                    Stretch2(
+                        unit->m_frameNext, 
+                        unit->m_framePrev1, 
+                        p, 
+                        unit->m_outFramePrev, 
+                        stftBufFftSize, 
+                        stftBufHopSize
+                    );
+            }
         } else {
             // Otherwise we're between two FFT frames, and we're going to have to
             // interpolate magnitude and frequency data.
@@ -243,17 +251,31 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             // This is the frame right before that. It's needed to compute the previous instantaneous frequencies.
             fillPolarBuf(stftData + ((lo-1) * stftBufFftSize), unit->m_framePrev2, stftBufFftSize);
             // Render the output FFT frame
-            Stretch3(
-                unit->m_frameNext, 
-                unit->m_framePrev1, 
-                unit->m_framePrev2, 
-                p, 
-                unit->m_outFramePrev, 
-                newPos-static_cast<float>(lo), 
-                stftBufFftSize, 
-                stftBufHopSize, 
-                phaseLock
-            );
+            switch (phaseLock) {
+                case 1:
+                    Stretch3Puckette(
+                        unit->m_frameNext, 
+                        unit->m_framePrev1, 
+                        unit->m_framePrev2, 
+                        p, 
+                        unit->m_outFramePrev, 
+                        newPos-static_cast<float>(lo), 
+                        stftBufFftSize, 
+                        stftBufHopSize
+                    );
+                    break;
+                default:
+                    Stretch3(
+                        unit->m_frameNext, 
+                        unit->m_framePrev1, 
+                        unit->m_framePrev2, 
+                        p, 
+                        unit->m_outFramePrev, 
+                        newPos-static_cast<float>(lo), 
+                        stftBufFftSize, 
+                        stftBufHopSize
+                    );
+            }
         }
         // We always need to store the resultant FFT frame in the UGen.
         // It is used in the next call to PV_PlayBufStretch_next, for 
@@ -276,59 +298,78 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
 /// \param outFramePrev The previously computed output STFT frame
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-/// \param phaseLock Whether or not to apply phase locking
 void Stretch2(
     const SCPolarBuf *frame, 
     const SCPolarBuf *framePrev, 
     SCPolarBuf *outFrame, 
     const SCPolarBuf *outFramePrev, 
     size_t fftSize, 
-    size_t hopSize, 
-    bool phaseLock) {
+    size_t hopSize) {
     outFrame->dc = frame->dc;
     outFrame->nyq = frame->nyq;
     for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
         outFrame->bin[xxk].mag = frame->bin[xxk].mag;
 
-        // Puckette-style phase locking
-        if (phaseLock) {
-            // Compute the instantaneous frequency
-            float omegaK = twopi * (xxk+1) / fftSize;
-            float phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
-            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
-            float instantaneousFreq = omegaK + phaseInc/hopSize;
+        // Compute the instantaneous frequency
+        float omegaK = twopi * (xxk+1) / fftSize;
+        float phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+        phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+        float instantaneousFreq = omegaK + phaseInc/hopSize;
+        
+        // Compute the new phase
+        outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+    }
+}
 
-            // In Puckette-style phase locking, we make a substitution for the previous phase,
-            // in order to "lock" phases of adjacent bins together.
-            float prevPhase = 0.0;
-            if (xxk == 0) {
-                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->dc, 0.f);
-                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
-                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
-            } else if (xxk == fftSize/2-2) {
-                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->nyq, 0.f);
-                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
-            } else {
-                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
-                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
-            }
-            
-            // Compute the new phase
-            outFrame->bin[xxk].phase = prevPhase + hopSize * instantaneousFreq;
+/// Computes a single frame of STFT data for time stretching.
+/// The assumption is that we are positioned exactly at `frame`, and we therefore
+/// just need framePrev to compute the instantaneous frequency. We also do not
+/// need to perform any magnitude or frequency interpolation.
+///
+/// This version uses Miller Puckette's phase locking.
+///
+/// \param frame The current STFT frame
+/// \param framePrev The previous STFT frame
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+void Stretch2Puckette(
+    const SCPolarBuf *frame, 
+    const SCPolarBuf *framePrev, 
+    SCPolarBuf *outFrame, 
+    const SCPolarBuf *outFramePrev, 
+    size_t fftSize, 
+    size_t hopSize) {
+    outFrame->dc = frame->dc;
+    outFrame->nyq = frame->nyq;
+    for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
+        outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+
+        // Compute the instantaneous frequency
+        float omegaK = twopi * (xxk+1) / fftSize;
+        float phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+        phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+        float instantaneousFreq = omegaK + phaseInc/hopSize;
+
+        // In Puckette-style phase locking, we make a substitution for the previous phase,
+        // in order to "lock" phases of adjacent bins together.
+        float prevPhase = 0.0;
+        if (xxk == 0) {
+            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->dc, 0.f);
+            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+        } else if (xxk == fftSize/2-2) {
+            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->nyq, 0.f);
+            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
         } else {
-            // Compute the instantaneous frequency
-            float omegaK = twopi * (xxk+1) / fftSize;
-            float phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
-            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
-            float instantaneousFreq = omegaK + phaseInc/hopSize;
-            
-            // Compute the new phase
-            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
         }
     }
 }
@@ -346,7 +387,6 @@ void Stretch2(
 /// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-/// \param phaseLock Whether or not to apply phase locking
 void Stretch3(
     const SCPolarBuf *frameNext, 
     const SCPolarBuf *framePrev1,
@@ -355,71 +395,98 @@ void Stretch3(
     const SCPolarBuf *outFramePrev,
     float pos,
     size_t fftSize, 
-    size_t hopSize, 
-    bool phaseLock) {
+    size_t hopSize) {
     outFrame->dc = INTERP(framePrev1->dc, frameNext->dc, pos);
     outFrame->nyq = INTERP(framePrev1->nyq, frameNext->nyq, pos);
     for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
         outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
 
-        // Puckette-style phase locking
-        if (phaseLock) {
-            float omegaK = twopi * (xxk+1) / fftSize;
+        float omegaK = twopi * (xxk+1) / fftSize;
 
-            // Compute the next instantaneous frequency
-            float phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
-            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
-            float instantaneousFreqNext = omegaK + phaseInc/hopSize;
+        // Compute the next instantaneous frequency
+        float phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+        phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+        float instantaneousFreqNext = omegaK + phaseInc/hopSize;
 
-            // Compute the previous instantaneous frequency
-            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
-            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
-            float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
+        // Compute the previous instantaneous frequency
+        phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+        phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+        float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
-            // Interpolate the instantaneous frequency
-            float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+        // Interpolate the instantaneous frequency
+        float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+        
+        // Compute the new phase
+        outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+    }
+}
 
-            // In Puckette-style phase locking, we make a substitution for the previous phase,
-            // in order to "lock" phases of adjacent bins together.
-            float prevPhase = 0.0;
-            if (xxk == 0) {
-                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->dc, 0.f);
-                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
-                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
-            } else if (xxk == fftSize/2-2) {
-                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->nyq, 0.f);
-                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
-            } else {
-                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
-                prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
-            }
-            
-            // Compute the new phase
-            outFrame->bin[xxk].phase = prevPhase + hopSize * instantaneousFreq;
+/// Computes a single frame of STFT data for time stretching.
+/// The assumption is that we are positioned between framePrev1 and frameNext.
+/// This means we will need to interpolate frequency data. So we will need to
+/// compute two frequencies for each bin, and that means we need three STFT frames.
+///
+/// This version uses Miller Puckette's phase locking.
+///
+/// \param frameNext The next STFT frame
+/// \param framePrev1 The previous STFT frame
+/// \param framePrev2 The previous STFT frame before that (required for instantaneous frequency interpolation)
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+void Stretch3Puckette(
+    const SCPolarBuf *frameNext, 
+    const SCPolarBuf *framePrev1,
+    const SCPolarBuf *framePrev2, 
+    SCPolarBuf *outFrame,
+    const SCPolarBuf *outFramePrev,
+    float pos,
+    size_t fftSize, 
+    size_t hopSize) {
+    outFrame->dc = INTERP(framePrev1->dc, frameNext->dc, pos);
+    outFrame->nyq = INTERP(framePrev1->nyq, frameNext->nyq, pos);
+    for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
+        outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+
+        float omegaK = twopi * (xxk+1) / fftSize;
+
+        // Compute the next instantaneous frequency
+        float phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+        phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+        float instantaneousFreqNext = omegaK + phaseInc/hopSize;
+
+        // Compute the previous instantaneous frequency
+        phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+        phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+        float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
+
+        // Interpolate the instantaneous frequency
+        float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+
+        // In Puckette-style phase locking, we make a substitution for the previous phase,
+        // in order to "lock" phases of adjacent bins together.
+        float prevPhase = 0.0;
+        if (xxk == 0) {
+            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->dc, 0.f);
+            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+        } else if (xxk == fftSize/2-2) {
+            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->nyq, 0.f);
+            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
         } else {
-            float omegaK = twopi * (xxk+1) / fftSize;
-
-            // Compute the next instantaneous frequency
-            float phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
-            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
-            float instantaneousFreqNext = omegaK + phaseInc/hopSize;
-
-            // Compute the previous instantaneous frequency
-            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
-            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
-            float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
-
-            // Interpolate the instantaneous frequency
-            float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
-            
-            // Compute the new phase
-            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
         }
+        
+        // Compute the new phase
+        outFrame->bin[xxk].phase = prevPhase + hopSize * instantaneousFreq;
     }
 }
 
