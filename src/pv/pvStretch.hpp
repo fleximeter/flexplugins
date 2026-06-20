@@ -24,6 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include "SC_Unit.h"
 #include "FFT_UGens.h"
+#include "peakFinder.hpp"
 
 /// Stores the state of a PV_PlayBufStretch UGen instance
 struct PV_PlayBufStretch : public Unit {
@@ -44,6 +45,9 @@ struct PV_PlayBufStretch : public Unit {
     
     /// The STFT frame two positions before the current position
     SCPolarBuf *m_framePrev2;
+
+    /// The peak finding utility for the Laroche/Dolson stretching algorithm
+    PeakFinder *m_peakFinder;
 
     /// Between 0 and 1; represents the start position of playback.
     /// If it jumps during playback, playback will be restarted

@@ -31,16 +31,21 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 extern InterfaceTable *ft;
 
 void PV_PlayBufStretch_Ctor(PV_PlayBufStretch *unit) {
+    PV_GET_BUF
+    
     // Connect to the STFT buffer. For now, we only allow this in the constructor.
-    float fbufnum = IN0(1);
-    uint32 bufnum = static_cast<uint32>(fbufnum);
-    if (bufnum >= unit->mWorld->mNumSndBufs) bufnum = 0;
-    unit->m_fbufnum = fbufnum;
-    unit->m_buf = unit->mWorld->mSndBufs + bufnum;
+    float fstftbufnum = IN0(1);
+    uint32 stftbufnum = static_cast<uint32>(fstftbufnum);
+    if (stftbufnum >= unit->mWorld->mNumSndBufs) stftbufnum = 0;
+    unit->m_fbufnum = fstftbufnum;
+    unit->m_buf = unit->mWorld->mSndBufs + stftbufnum;
     unit->m_outFramePrev = nullptr;
     unit->m_frameNext = nullptr;
     unit->m_framePrev1 = nullptr;
     unit->m_framePrev2 = nullptr;
+    unit->m_peakFinder = (PeakFinder*)RTAlloc(unit->mWorld, sizeof(PeakFinder));
+    new (unit->m_peakFinder) PeakFinder(static_cast<size_t>(buf->samples), 2);
+    unit->m_peakFinder->memLoad(RTAlloc(unit->mWorld, unit->m_peakFinder->memSize()));
     
     // Configure position
     float startPos = sc_clip<float>(IN0(2), 0.0, 1.0);
@@ -53,6 +58,13 @@ void PV_PlayBufStretch_Ctor(PV_PlayBufStretch *unit) {
 }
 
 void PV_PlayBufStretch_Dtor(PV_PlayBufStretch *unit) {
+    if (unit->m_peakFinder) {
+        void *reservedMem = unit->m_peakFinder->memRetrieve();
+        if (reservedMem) {
+            RTFree(unit->mWorld, reservedMem);
+        }
+        RTFree(unit->mWorld, unit->m_peakFinder);
+    }
     if (unit->m_outFramePrev) {
         RTFree(unit->mWorld, unit->m_outFramePrev);
     }
