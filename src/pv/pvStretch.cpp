@@ -76,17 +76,17 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     const SndBuf *stftBuf = unit->m_buf;
     if (!stftBuf) {
         OUT0(0) = -1.f;
-        std::cout << "WARNING: The stftBuf could not be accessed. Aborting.\n";
+        std::cout << "WARNING: The stftBuffer could not be accessed. Aborting.\n";
         return;
     }
     ACQUIRE_SNDBUF_SHARED(stftBuf);
     const float* bufData __attribute__((__unused__)) = stftBuf->data;
     const float* stftData __attribute__((__unused__)) = stftBuf->data + 3;
-    uint32 bufChannels __attribute__((__unused__)) = stftBuf->channels;
-    uint32 bufSamples __attribute__((__unused__)) = stftBuf->samples;
-    uint32 bufFrames = stftBuf->frames;
+    const uint32 bufChannels __attribute__((__unused__)) = stftBuf->channels;
+    const uint32 bufSamples __attribute__((__unused__)) = stftBuf->samples;
+    const uint32 bufFrames = stftBuf->frames;
     // first 3 frames have analysis parameters
-    int stftFrames = (static_cast<int>(stftBuf->samples) - 3) / static_cast<int>(buf->samples);
+    const int stftFrames = (static_cast<int>(stftBuf->samples) - 3) / static_cast<int>(buf->samples);
 
     // If the buffer is improperly configured, we cannot use it.
     if (bufChannels != 1) {
@@ -106,9 +106,9 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     }
 
     // Basic information
-    size_t stftBufFftSize = bufData[0];
-    size_t stftBufHopSize = static_cast<size_t>(bufData[1] * stftBufFftSize);  // in frames, not fraction
-    int stftBufWinType = static_cast<int>(bufData[2]);  // -1, 0, or 1. This information is probably extraneous.
+    const size_t stftBufFftSize = static_cast<size_t>(bufData[0]);
+    const size_t stftBufHopSize = static_cast<size_t>(bufData[1] * stftBufFftSize);  // in frames, not fraction
+    const int stftBufWinType = static_cast<int>(bufData[2]);  // -1, 0, or 1. This information is probably extraneous.
     //std::cout << "FFT size: " << stftBufFftSize << " Hop size: " << stftBufHopSize << " Win type: " << stftBufWinType << " STFT frames " << stftFrames << "\n";
 
     if (stftBufFftSize != buf->samples) {
@@ -135,8 +135,8 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     }
     
     float startPos = sc_clip<float>(IN0(2), 0.0, 1.0);
-    float rate = IN0(3);
-    float loop = IN0(5);
+    const float rate = IN0(3);
+    const float loop = IN0(5);
     // std::cout << "Rate: " << rate << " Loop: " << loop << "\n";
 
     if (startPos != unit->m_startPos) {
@@ -148,7 +148,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     // Now that we've run setup, we're ready to read STFT data and perform phase vocoder stretching.
 
     // First we need to figure out where we are, and if that means we need to loop or quit.
-    float newPos = unit->m_pos + rate;
+    const float newPos = unit->m_pos + rate;
     if (newPos > stftFrames - 1) {
         if (loop) {
             unit->m_firstFrame = true;
@@ -165,10 +165,10 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     // This is essential to make sure that subsequent phase calculations are correctly aligned.
     if (unit->m_firstFrame) {
         // Compute the index of the first frame
-        size_t xxi = static_cast<size_t>(std::round(startPos * stftFrames));
-        if (xxi >= stftFrames) {
+        size_t firstFrameIdx = static_cast<size_t>(std::round(startPos * stftFrames));
+        if (firstFrameIdx >= stftFrames) {
             if (loop) {
-                xxi = 0;
+                firstFrameIdx = 0;
             } else {
                 OUT0(0) = -1.f;
                 RELEASE_SNDBUF_SHARED(stftBuf);
@@ -179,7 +179,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
 
         // Copy the FFT data over
         SCPolarBuf *p = ToPolarApx(buf);
-        const float *currentFftFrame = stftData + (xxi * stftBufFftSize);
+        const float *currentFftFrame = stftData + (firstFrameIdx * stftBufFftSize);
         // Fill the output buffer
         fillPolarBuf(currentFftFrame, p, stftBufFftSize);
         
@@ -189,7 +189,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
         fillPolarBuf(currentFftFrame, unit->m_outFramePrev, stftBufFftSize);
 
         // We have to advance by one frame because we need to be able to compute frequency for time stretching.
-        unit->m_pos = static_cast<float>(xxi + 1);
+        unit->m_pos = static_cast<float>(firstFrameIdx + 1);
         unit->m_firstFrame = false;
     }
     
@@ -201,14 +201,14 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             // std::cout << "Phase lock\n";
         }
         SCPolarBuf *p = ToPolarApx(buf);
-        size_t intPos = static_cast<size_t>(std::round(newPos));
+        size_t roundedPos = static_cast<size_t>(std::round(newPos));
         //std::cout << "New pos: " << intPos << "\n";
-        if (std::abs(intPos-newPos) < 1e-3) {
+        if (std::abs(roundedPos-newPos) < 1e-3) {
             // If we're right smack on a specific FFT frame, we don't
             // need to do any magnitude or frequency interpolation, so
             // we only need the current and previous FFT frames from the buffer.
-            size_t lastPos = intPos - 1;
-            fillPolarBuf(stftData + (intPos * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
+            size_t lastPos = roundedPos - 1;
+            fillPolarBuf(stftData + (roundedPos * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
             fillPolarBuf(stftData + (lastPos * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
             // Render the output FFT frame
             Stretch2(
@@ -290,19 +290,19 @@ void Stretch2(
             // in order to "lock" phases of adjacent bins together.
             float prevPhase = 0.0;
             if (xxk == 0) {
-                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->dc, 0.f);
-                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->dc, 0.f);
+                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
                 prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
             } else if (xxk == fftSize/2-2) {
-                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->nyq, 0.f);
+                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->nyq, 0.f);
                 prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
             } else {
-                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
                 prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
             }
             
@@ -371,19 +371,19 @@ void Stretch3(
             // in order to "lock" phases of adjacent bins together.
             float prevPhase = 0.0;
             if (xxk == 0) {
-                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->dc, 0.f);
-                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->dc, 0.f);
+                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
                 prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
             } else if (xxk == fftSize/2-2) {
-                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->nyq, 0.f);
+                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->nyq, 0.f);
                 prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
             } else {
-                std::complex<float> prevBinKMinus1 = std::polar(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-                std::complex<float> prevBinK = std::polar(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-                std::complex<float> prevBinKPlus1 = std::polar(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+                std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
+                std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
+                std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
                 prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
             }
             
