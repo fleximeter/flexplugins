@@ -1,5 +1,5 @@
 /*
-File: rubberBandStretcher.hpp
+File: rubberBandStretcherBuf.hpp
 Author: Jeff Martin
 
 Description:
@@ -23,10 +23,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #pragma once
+
 #include "SC_Unit.h"
 #include "rubberband/RubberBandStretcher.h"
 
-struct RubberBandStretcher : public Unit {
+struct RubberBandStretcherBuf : public Unit {
     /// The stretcher
     RubberBand::RubberBandStretcher* m_stretcher;
 
@@ -41,8 +42,17 @@ struct RubberBandStretcher : public Unit {
     int m_detectorOption;
     int m_phaseOption;
     int m_pitchQuality;
+
+    /// The index of the buffer with STFT data
+    float m_fbufnum;
+
+    /// The audio buffer to write the stretched audio to
+    SndBuf *m_buf;
+
+    /// The next sample to write to
+    size_t m_writePtr;
 };
 
-void RubberBandStretcher_Ctor(RubberBandStretcher *unit);
-void RubberBandStretcher_Dtor(RubberBandStretcher *unit);
-void RubberBandStretcher_next(RubberBandStretcher *unit, int inNumSamples);
+void RubberBandStretcherBuf_Ctor(RubberBandStretcherBuf *unit);
+void RubberBandStretcherBuf_Dtor(RubberBandStretcherBuf *unit);
+void RubberBandStretcherBuf_next(RubberBandStretcherBuf *unit, int inNumSamples);

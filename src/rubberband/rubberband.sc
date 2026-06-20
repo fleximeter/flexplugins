@@ -45,3 +45,20 @@ RubberBandStretcher : UGen {
             .madd(1.0, 0.0);
     }
 }
+
+// RubberBandStretcherBuf is a phase vocoder-based time stretcher/pitch shifter
+// using the Rubber Band library.
+// This UGen writes the output to a buffer, which allows arbitrary time stretches
+// including values less than 1.0.
+RubberBandStretcherBuf : UGen {
+    *ar {
+        arg in, bufnum=0, offset=0.0, recLevel=1.0, preLevel=0.0, run=1.0, loop=1.0, trigger=1.0, 
+            timeRatio=1.0, pitchRatio=1.0, formantRatio=0.0, transientsMode=0, 
+            detectorMode=0, phaseMode=0, pitchQuality=0, windowOption=0, 
+            smoothing=0, engine=0, doneAction=0;
+        ^this.multiNew('audio', in, bufnum, offset, recLevel, preLeel, run, loop, trigger, 
+            timeRatio, pitchRatio, formantRatio, transientsMode,
+            detectorMode, phaseMode, pitchQuality, windowOption, 
+            smoothing, engine, doneAction);
+    }
+}

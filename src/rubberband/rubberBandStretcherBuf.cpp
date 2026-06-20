@@ -1,5 +1,5 @@
 /*
-File: rubberBandStretcher.cpp
+File: rubberBandStretcherBuf.cpp
 Author: Jeff Martin
 
 Description:
@@ -22,13 +22,13 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "rubberBandStretcher.hpp"
+#include "rubberBandStretcherBuf.hpp"
 #include <limits>
 #include "SC_PlugIn.h"
 
 extern InterfaceTable *ft;
 
-void RubberBandStretcher_Ctor(RubberBandStretcher *unit) {
+void RubberBandStretcherBuf_Ctor(RubberBandStretcherBuf *unit) {
     float timeRatio = IN0(1);
     float pitchRatio = IN0(2);
     float formantRatio = IN0(3);
@@ -47,6 +47,14 @@ void RubberBandStretcher_Ctor(RubberBandStretcher *unit) {
     unit->m_detectorOption = detector;
     unit->m_phaseOption = phaseOption;
     unit->m_pitchQuality = pitchQuality;
+
+    // Acquire the sound buffer
+    float fbufnum = IN0(1);
+    uint32 bufnum = static_cast<uint32>(fbufnum);
+    if (bufnum >= unit->mWorld->mNumSndBufs) bufnum = 0;
+    unit->m_fbufnum = fbufnum;
+    unit->m_buf = unit->mWorld->mSndBufs + bufnum;
+    unit->m_writePtr = 0;
 
     // Set up RubberBandStretcher initial options
     int options = 0x01000001;  // formant-preserving, real-time options set
@@ -135,102 +143,13 @@ void RubberBandStretcher_Ctor(RubberBandStretcher *unit) {
     // Initialize first out sample
     OUT0(0) = 0;
 
-    SETCALC(RubberBandStretcher_next);
+    SETCALC(RubberBandStretcherBuf_next);
 }
 
-void RubberBandStretcher_Dtor(RubberBandStretcher *unit) {
+void RubberBandStretcherBuf_Dtor(RubberBandStretcherBuf *unit) {
     RTFree(unit->mWorld, unit->m_stretcher);
 }
 
-void RubberBandStretcher_next(RubberBandStretcher *unit, int inNumSamples) {
-    float *in = IN(0);
-    float *out = OUT(0);
-    float timeRatio = IN0(1);
-    float pitchRatio = IN0(2);
-    float formantRatio = IN0(3);
-    int transientsMode = static_cast<int>(IN0(4));
-    int detector = static_cast<int>(IN0(5));
-    int phaseOption = static_cast<int>(IN0(6));
-    int pitchQuality = static_cast<int>(IN0(7));
+void RubberBandStretcherBuf_next(RubberBandStretcherBuf *unit, int inNumSamples) {
 
-    // Update shifter options only if something has changed
-    if (timeRatio != unit->m_timeRatio) {
-        unit->m_stretcher->setTimeRatio(sc_clip(timeRatio, 1.f, std::numeric_limits<float>::infinity()));
-    }
-    if (pitchRatio != unit->m_pitchRatio) {
-        unit->m_stretcher->setPitchScale(sc_clip(pitchRatio, 1e-2, 64));
-    }
-    if (formantRatio != unit->m_formantRatio) {
-        unit->m_stretcher->setFormantScale(sc_clip(formantRatio, 1e-2, 64));
-    }
-    // QUESTION: Will this method of setting options override all existing options,
-    // or just the option provided? May need to compute all options from scratch.
-    if (transientsMode != unit->m_transientsMode) {
-        switch (transientsMode) {
-            case 1:
-                unit->m_stretcher->setTransientsOption(0x00000100);
-                break;
-            case 2:
-                unit->m_stretcher->setTransientsOption(0x00000200);
-                break;
-            default:
-                unit->m_stretcher->setTransientsOption(0x00000000);
-        }
-    }
-    if (detector != unit->m_detectorOption) {
-        switch (detector) {
-            case 1:
-                unit->m_stretcher->setDetectorOption(0x00000400);
-                break;
-            case 2:
-                unit->m_stretcher->setDetectorOption(0x00000800);
-                break;
-            default:
-                unit->m_stretcher->setDetectorOption(0x00000000);
-        }
-    }
-    if (phaseOption != unit->m_phaseOption) {
-        switch (phaseOption) {
-            case 1:
-                unit->m_stretcher->setPhaseOption(0x00002000);
-                break;
-            default:
-                unit->m_stretcher->setPhaseOption(0x00000000);
-        }
-    }
-    if (pitchQuality != unit->m_pitchQuality) {
-        switch (pitchQuality) {
-            case 1:
-                unit->m_stretcher->setPitchOption(0x02000000);
-                break;
-            case 2:
-                unit->m_stretcher->setPitchOption(0x04000000);
-                break;
-            default:
-                unit->m_stretcher->setPitchOption(0x00000000);
-        }
-    }
-
-    unit->m_stretcher->process(&in, BUFLENGTH, false);
-    
-    // If we can retrieve a full block worth of audio
-    if (unit->m_stretcher->available() >= BUFLENGTH) {
-        unit->m_stretcher->retrieve(&out, BUFLENGTH);
-        // Clear initial samples if necessary
-        if (unit->m_samplesToDiscard > 0) {
-            size_t i = 0;
-            while (i < BUFLENGTH && unit->m_samplesToDiscard > 0) {
-                out[i] = 0.f;
-                unit->m_samplesToDiscard--;
-                i++;
-            }
-        }
-    }
-    
-    // Output zeros if the shifter has no new samples available
-    else {
-        for (size_t i = 0; i < BUFLENGTH; i++) {
-            out[i] = 0.f;
-        }
-    }
 }
