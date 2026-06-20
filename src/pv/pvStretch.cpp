@@ -221,11 +221,24 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             // Render the output FFT frame
             switch (phaseLock) {
                 case 1:
+                    // std::cout <<"P stretch\n";
                     Stretch2Puckette(
                         unit->m_frameNext, 
                         unit->m_framePrev1, 
                         p, 
                         unit->m_outFramePrev, 
+                        stftBufFftSize, 
+                        stftBufHopSize
+                    );
+                    break;
+                case 2:
+                    // std::cout <<"LD stretch\n";
+                    Stretch2LarocheDolson(
+                        unit->m_frameNext, 
+                        unit->m_framePrev1, 
+                        p, 
+                        unit->m_outFramePrev, 
+                        unit->m_peakFinder,
                         stftBufFftSize, 
                         stftBufHopSize
                     );
@@ -253,12 +266,27 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             // Render the output FFT frame
             switch (phaseLock) {
                 case 1:
+                    // std::cout <<"P stretch\n";
                     Stretch3Puckette(
                         unit->m_frameNext, 
                         unit->m_framePrev1, 
                         unit->m_framePrev2, 
                         p, 
                         unit->m_outFramePrev, 
+                        newPos-static_cast<float>(lo), 
+                        stftBufFftSize, 
+                        stftBufHopSize
+                    );
+                    break;
+                case 2:
+                    // std::cout <<"LD stretch\n";
+                    Stretch3LarocheDolson(
+                        unit->m_frameNext, 
+                        unit->m_framePrev1, 
+                        unit->m_framePrev2, 
+                        p, 
+                        unit->m_outFramePrev, 
+                        unit->m_peakFinder,
                         newPos-static_cast<float>(lo), 
                         stftBufFftSize, 
                         stftBufHopSize
@@ -370,6 +398,104 @@ void Stretch2Puckette(
             std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
             std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
             prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+        }
+    }
+}
+
+/// Computes a single frame of STFT data for time stretching,
+/// using the Laroche/Dolson identity phase locking scheme.
+/// The assumption is that we are positioned exactly at `frame`, and we therefore
+/// just need framePrev to compute the instantaneous frequency. We also do not
+/// need to perform any magnitude or frequency interpolation.
+///
+/// \param frame The current STFT frame
+/// \param framePrev The previous STFT frame
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param peakFinder The PeakFinder instance for determining peak locations in the magnitude spectrum
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+void Stretch2LarocheDolson(
+    const SCPolarBuf *frame, 
+    const SCPolarBuf *framePrev, 
+    SCPolarBuf *outFrame, 
+    const SCPolarBuf *outFramePrev, 
+    PeakFinder *peakFinder,
+    size_t fftSize, 
+    size_t hopSize) {
+    outFrame->dc = frame->dc;
+    outFrame->nyq = frame->nyq;
+
+    // Acquire peaks
+    peakFinder->analyze(frame);
+
+    if (peakFinder->size() == 0) {
+        // No phase locking if no peaks were acquired
+        for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
+            outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+
+            // Compute the instantaneous frequency
+            double omegaK = twopi * (xxk+1) / fftSize;
+            double phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreq = omegaK + phaseInc/hopSize;
+
+            // Compute the phase
+            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        }
+    } else {
+        // Update any bins that occur below the lowest peak's region of influence
+        for (size_t xxk = 0; xxk < peakFinder->peaks[0].leftValley; xxk++) {
+            outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+
+            // Compute the instantaneous frequency
+            double omegaK = twopi * (xxk+1) / fftSize;
+            double phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreq = omegaK + phaseInc/hopSize;
+
+            // Compute the phase
+            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        }
+
+        // Update any bins that occur above the highest peak's region of influence
+        for (size_t xxk = peakFinder->peaks[peakFinder->size()-1].rightValley + 1; xxk < fftSize / 2 - 1; xxk++) {
+            outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+
+            // Compute the instantaneous frequency
+            double omegaK = twopi * (xxk+1) / fftSize;
+            double phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreq = omegaK + phaseInc/hopSize;
+
+            // Compute the phase
+            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        }
+
+        // Update all other peaks
+        for (size_t xxn = 0; xxn < peakFinder->size(); xxn++) {
+            // First we compute the new phase for the peak bin as usual
+            Peak peak = peakFinder->peaks[xxn];
+            outFrame->bin[peak.peak].mag = frame->bin[peak.peak].mag;
+
+            // Compute the instantaneous frequency
+            double omegaK = twopi * (peak.peak+1) / fftSize;
+            double phaseInc = frame->bin[peak.peak].phase - framePrev->bin[peak.peak].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreq = omegaK + phaseInc/hopSize;
+
+            // Compute the phase
+            outFrame->bin[peak.peak].phase = outFramePrev->bin[peak.peak].phase + hopSize * instantaneousFreq;
+
+            // Then we update the phases of all other peaks
+            for (size_t xxo = peak.leftValley; xxo < peak.peak; xxo++) {
+                outFrame->bin[xxo].mag = frame->bin[xxo].mag;
+                outFrame->bin[xxo].phase = outFrame->bin[peak.peak].phase + frame->bin[xxo].phase - frame->bin[peak.peak].phase;
+            }
+            for (size_t xxo = peak.peak + 1; xxo <= peak.rightValley; xxo++) {
+                outFrame->bin[xxo].mag = frame->bin[xxo].mag;
+                outFrame->bin[xxo].phase = outFrame->bin[peak.peak].phase + frame->bin[xxo].phase - frame->bin[peak.peak].phase;
+            }
         }
     }
 }
@@ -490,6 +616,152 @@ void Stretch3Puckette(
     }
 }
 
+/// Computes a single frame of STFT data for time stretching,
+/// using the Laroche/Dolson identity phase locking scheme.
+/// The assumption is that we are positioned exactly at `frame`, and we therefore
+/// just need framePrev to compute the instantaneous frequency. We also do not
+/// need to perform any magnitude or frequency interpolation.
+///
+/// \param frameNext The next STFT frame
+/// \param framePrev1 The previous STFT frame
+/// \param framePrev2 The previous STFT frame before that (required for instantaneous frequency interpolation)
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param peakFinder The PeakFinder instance for determining peak locations in the magnitude spectrum
+/// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+static void Stretch3LarocheDolson(
+    const SCPolarBuf *frameNext,
+    const SCPolarBuf *framePrev1, 
+    const SCPolarBuf *framePrev2, 
+    SCPolarBuf *outFrame, 
+    const SCPolarBuf *outFramePrev,
+    PeakFinder *peakFinder,
+    double pos,
+    size_t fftSize, 
+    size_t hopSize) {
+    outFrame->dc = INTERP(framePrev1->dc, frameNext->dc, pos);
+    outFrame->nyq = INTERP(framePrev1->nyq, frameNext->nyq, pos);
+    
+    // Get the closest bin for phase relationships
+    const SCPolarBuf *cframe = nullptr;
+    if (pos >= 0.5) {
+        cframe = frameNext;
+    } else {
+        cframe = framePrev1;
+    }
+
+    // Acquire peaks
+    std::vector<size_t> peaks;
+    peakFinder->analyze(cframe);
+
+    if (peaks.size() == 0) {
+        // No phase locking if no peaks were acquired
+        for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
+            outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+            
+            double omegaK = twopi * (xxk+1) / fftSize;
+
+            // Compute the next instantaneous frequency
+            double phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreqNext = omegaK + phaseInc/hopSize;
+
+            // Compute the previous instantaneous frequency
+            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
+
+            // Interpolate the instantaneous frequency
+            double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+            
+            // Compute the new phase
+            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        }
+    } else {
+        // Update any bins that occur below the lowest peak's region of influence
+        for (size_t xxk = 0; xxk < peakFinder->peaks[0].leftValley; xxk++) {
+            outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+
+            // Compute the instantaneous frequency
+            double omegaK = twopi * (xxk+1) / fftSize;
+
+            double phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreqNext = omegaK + phaseInc/hopSize;
+
+            // Compute the previous instantaneous frequency
+            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
+
+            // Interpolate the instantaneous frequency
+            double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+
+            // Compute the phase
+            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        }
+
+        // Update any bins that occur above the highest peak's region of influence
+        for (size_t xxk = peakFinder->peaks[peakFinder->size()-1].rightValley + 1; xxk < fftSize / 2 - 1; xxk++) {
+            outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+
+            // Compute the instantaneous frequency
+            double omegaK = twopi * (xxk+1) / fftSize;
+
+            double phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreqNext = omegaK + phaseInc/hopSize;
+
+            // Compute the previous instantaneous frequency
+            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
+
+            // Interpolate the instantaneous frequency
+            double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+
+            // Compute the phase
+            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        }
+        
+        for (size_t xxn = 0; xxn < peaks.size(); xxn++) {
+            // First we compute the new phase for the peak bin as usual
+            Peak peak = peakFinder->peaks[xxn];
+            outFrame->bin[peak.peak].mag = INTERP(framePrev1->bin[peak.peak].mag, frameNext->bin[peak.peak].mag, pos);
+            
+            // Compute the instantaneous frequency
+            double omegaK = twopi * (peak.peak+1) / fftSize;
+
+            double phaseInc = frameNext->bin[peak.peak].phase - framePrev1->bin[peak.peak].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreqNext = omegaK + phaseInc/hopSize;
+
+            // Compute the previous instantaneous frequency
+            phaseInc = framePrev1->bin[peak.peak].phase - framePrev2->bin[peak.peak].phase - hopSize * omegaK;
+            phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
+            double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
+
+            // Interpolate the instantaneous frequency
+            double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+
+            // Compute the phase
+            outFrame->bin[peak.peak].phase = outFramePrev->bin[peak.peak].phase + hopSize * instantaneousFreq;
+
+            // Then we update all bins in the region of influence
+            for (size_t xxo = peak.leftValley; xxo < peak.peak; xxo++) {
+                outFrame->bin[xxo].mag = INTERP(framePrev1->bin[xxo].mag, frameNext->bin[xxo].mag, pos);
+                outFrame->bin[xxo].phase = outFrame->bin[peak.peak].phase + cframe->bin[xxo].phase - cframe->bin[peak.peak].phase;
+            }
+            for (size_t xxo = peak.peak + 1; xxo <= peak.rightValley; xxo++) {
+                outFrame->bin[xxo].mag = INTERP(framePrev1->bin[xxo].mag, frameNext->bin[xxo].mag, pos);
+                outFrame->bin[xxo].phase = outFrame->bin[peak.peak].phase + cframe->bin[xxo].phase - cframe->bin[peak.peak].phase;
+            }
+        }
+    }
+}
+
 /// Fills a SCPolarBuf with saved STFT data from a single frame
 ///
 /// \param fftBuf The FFT frame from the STFT buffer
@@ -517,5 +789,121 @@ void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbi
     for (size_t xxn = 0; xxn < numbins; xxn++) {
         destBuf->bin[xxn].mag = sourceBuf->bin[xxn].mag;
         destBuf->bin[xxn].phase = sourceBuf->bin[xxn].phase;
+    }
+}
+
+
+Peak::Peak(size_t peak) : peak(peak) {}
+Peak::Peak(size_t peak, size_t leftValley, size_t rightValley) : peak(peak), leftValley(leftValley), rightValley(rightValley) {}
+
+#define SHIFT(arr, idx, val) \
+    for (size_t xxi = )
+
+PeakFinder::PeakFinder(size_t fftSize, size_t radius) {
+    m_maxSize = fftSize/2-1;
+    m_radius = radius;
+    m_size = 0;
+    peaks = nullptr;
+    m_queueL = nullptr;
+    m_queueR = nullptr;
+}
+
+void PeakFinder::memLoad(void* arr) {
+    size_t *data = (size_t*)arr;
+    m_queueL = data;
+    m_queueR = data + m_radius;
+    peaks = (Peak*)(data + 2 * m_radius);
+}
+
+size_t PeakFinder::memSize() const {
+    return m_radius * 2 * sizeof(size_t) + m_maxSize * sizeof(Peak);
+}
+
+void* PeakFinder::memRetrieve() {
+    return (void*)m_queueL;
+}
+
+void PeakFinder::clear() {
+    m_size = 0;
+}
+
+size_t PeakFinder::maxSize() const {
+    return m_maxSize;
+}
+
+size_t PeakFinder::size() const {
+    return m_size;
+}
+
+void PeakFinder::analyze(const SCPolarBuf *buf) {
+    // We can only perform the analysis if we have enough bins
+    if (m_queueL && m_maxSize > m_radius * 2 + 1) {
+        m_size = 0;  // clear any existing data
+        
+        size_t xxi = m_radius;
+        while (xxi < m_maxSize - m_radius) {
+            bool isMax = true;
+            for (size_t xxj = xxi - m_radius; xxj < xxi; xxj++) {
+                if (buf->bin[xxj].mag >= buf->bin[xxi].mag) {
+                    isMax = false;
+                    break;
+                }
+            }
+            for (size_t xxj = xxi + 1; xxj <= xxi + m_radius; xxj++) {
+                if (buf->bin[xxj].mag >= buf->bin[xxi].mag) {
+                    isMax = false;
+                    break;
+                }
+            }
+            if (isMax) {
+                peaks[m_size] = Peak(xxi);
+                m_size++;
+                xxi += m_radius + 1;
+            } else {
+                xxi++;
+            }
+        }
+
+        // Find the left valley for the first peak, and the right valley
+        // for the last peak.
+        if (m_size > 0) {
+            float min = buf->bin[0].mag;
+            size_t argmin = 0;
+            size_t xxk = 1;
+            for (; xxk < peaks[0].peak; xxk++) {
+                if (buf->bin[xxk].mag < min) {
+                    min = buf->bin[xxk].mag;
+                    argmin = xxk;
+                }
+            }
+            peaks[0].leftValley = argmin;
+            xxk = peaks[m_size-1].peak + 1;
+            min = buf->bin[xxk].mag;
+            argmin = xxk;
+            for (xxk++; xxk < m_maxSize; xxk++) {
+                if (buf->bin[xxk].mag < min) {
+                    min = buf->bin[xxk].mag;
+                    argmin = xxk;
+                }
+            }
+            peaks[m_size-1].rightValley = argmin;
+        } 
+        
+        // Find the remaining left and right valleys
+        if (m_size > 1) {
+            for (size_t xxj = 0; xxj < m_size-1; xxj++) {                
+                size_t xxk = peaks[xxj].peak + 1;
+                float min = buf->bin[xxk].mag;
+                size_t argmin = xxk;
+                for (xxk++; xxk < peaks[xxj+1].peak; xxk++) {
+                    if (buf->bin[xxk].mag < min) {
+                        min = buf->bin[xxk].mag;
+                        argmin = xxk;
+                    }
+                }
+                peaks[xxj].rightValley = argmin - 1;
+                peaks[xxj+1].leftValley = argmin;
+            }
+        }
     }
 }

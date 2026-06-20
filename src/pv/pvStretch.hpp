@@ -24,7 +24,60 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include "SC_Unit.h"
 #include "FFT_UGens.h"
-#include "peakFinder.hpp"
+
+class Peak {
+public:
+    Peak(size_t peak);
+    Peak(size_t peak, size_t leftValley, size_t rightValley);
+    size_t peak, leftValley, rightValley;
+};
+
+class PeakFinder {
+public:
+    /// Constructs the PeakFinder
+    ///
+    /// \param fftSize The FFT size
+    PeakFinder(size_t fftSize, size_t radius);
+
+    /// Finds peaks in the provided SCPolarBuf. Note that this buffer must correspond
+    /// to the original FFT size provided for the PeakFinder--otherwise memory errors may occur.
+    ///
+    /// \param buf The buffer to analyze
+    void analyze(const SCPolarBuf *buf);
+
+    /// Loads memory from the external SuperCollider allocator. Memory is allocated
+    /// using RTAlloc() and the size is specified by the memSize() method.
+    ///
+    /// \param arr The allocated memory
+    void memLoad(void *arr);
+
+    /// Gets the memory size required for the PeakFinder
+    size_t memSize() const;
+
+    /// Gets the max size of the PeakFinder
+    ///
+    /// \returns The max size
+    size_t maxSize() const;
+
+    /// Gets the current size of the PeakFinder (the number of peaks stored)
+    ///
+    /// \returns The current size
+    size_t size() const;
+
+    /// Clears the PeakFinder
+    void clear();
+
+    /// Gets a pointer to the memory that was allocated for the PeakFinder
+    /// so that it can be deallocated
+    ///
+    /// \return The memory pointer
+    void* memRetrieve();
+
+    Peak *peaks;
+private:
+    size_t m_maxSize, m_size, m_radius;
+    size_t *m_queueL, *m_queueR;
+};
 
 /// Stores the state of a PV_PlayBufStretch UGen instance
 struct PV_PlayBufStretch : public Unit {
@@ -113,6 +166,28 @@ void Stretch2Puckette(
     size_t fftSize, 
     size_t hopSize);
 
+/// Computes a single frame of STFT data for time stretching,
+/// using the Laroche/Dolson identity phase locking scheme.
+/// The assumption is that we are positioned exactly at `frame`, and we therefore
+/// just need framePrev to compute the instantaneous frequency. We also do not
+/// need to perform any magnitude or frequency interpolation.
+///
+/// \param frame The current STFT frame
+/// \param framePrev The previous STFT frame
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param peakFinder The PeakFinder instance for determining peak locations in the magnitude spectrum
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+void Stretch2LarocheDolson(
+    const SCPolarBuf *frame, 
+    const SCPolarBuf *framePrev, 
+    SCPolarBuf *outFrame, 
+    const SCPolarBuf *outFramePrev, 
+    PeakFinder *peakFinder,
+    size_t fftSize, 
+    size_t hopSize);
+
 /// Computes a single frame of STFT data for time stretching.
 /// The assumption is that we are positioned between framePrev1 and frameNext.
 /// This means we will need to interpolate frequency data. So we will need to
@@ -158,6 +233,32 @@ void Stretch3Puckette(
     SCPolarBuf *outFrame,
     const SCPolarBuf *outFramePrev,
     float pos,
+    size_t fftSize, 
+    size_t hopSize);
+
+/// Computes a single frame of STFT data for time stretching,
+/// using the Laroche/Dolson identity phase locking scheme.
+/// The assumption is that we are positioned exactly at `frame`, and we therefore
+/// just need framePrev to compute the instantaneous frequency. We also do not
+/// need to perform any magnitude or frequency interpolation.
+///
+/// \param frameNext The next STFT frame
+/// \param framePrev1 The previous STFT frame
+/// \param framePrev2 The previous STFT frame before that (required for instantaneous frequency interpolation)
+/// \param [out] outFrame The output STFT frame
+/// \param outFramePrev The previously computed output STFT frame
+/// \param peakFinder The PeakFinder instance for determining peak locations in the magnitude spectrum
+/// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+static void Stretch3LarocheDolson(
+    const SCPolarBuf *frameNext,
+    const SCPolarBuf *framePrev1, 
+    const SCPolarBuf *framePrev2, 
+    SCPolarBuf *outFrame, 
+    const SCPolarBuf *outFramePrev,
+    PeakFinder *peakFinder,
+    double pos,
     size_t fftSize, 
     size_t hopSize);
 
