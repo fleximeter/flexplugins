@@ -1,7 +1,7 @@
 class:: ImpulseJitter
 summary:: Modified Impulse with jitter
 related:: Classes/Impulse, Classes/Dust
-categories:: Libraries>JeffUGens, UGens>Generators>Stochastic
+categories:: Libraries>FlexUGens, UGens>Generators>Stochastic
 
 
 Description::

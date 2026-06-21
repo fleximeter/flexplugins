@@ -1,7 +1,7 @@
 class:: ImpulseDropout
 summary:: Modified Impulse with dropout
 related:: Classes/Impulse, Classes/Dust
-categories:: Libraries>JeffUGens, UGens>Generators>Stochastic
+categories:: Libraries>FlexUGens, UGens>Generators>Stochastic
 
 
 Description::
