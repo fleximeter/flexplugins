@@ -25,6 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "SC_PlugIn.h"
 #include "rubberBandPS.hpp"
 #include "rubberBandStretcher.hpp"
+#include "rubberBandStretcherBuf.hpp"
 
 InterfaceTable *ft;
 
@@ -32,4 +33,5 @@ PluginLoad(RubberBandPlugins) {
     ft = inTable;
     DefineDtorUnit(RubberBandPS);
     DefineDtorUnit(RubberBandStretcher);
+    DefineDtorUnit(RubberBandStretcherBuf);
 }

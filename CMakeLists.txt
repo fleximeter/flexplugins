@@ -134,6 +134,7 @@ install(FILES
     src/pv/PV_MagXFade.schelp
     src/rubberband/RubberBandPS.schelp
     src/rubberband/RubberBandStretcher.schelp
+    src/rubberband/RubberBandStretcherBuf.schelp
     DESTINATION HelpSource/Classes
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )

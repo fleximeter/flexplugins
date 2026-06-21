@@ -31,6 +31,9 @@ struct RubberBandStretcherBuf : public Unit {
     /// The stretcher
     RubberBand::RubberBandStretcher* m_stretcher;
 
+    /// A buffer
+    float *m_localBuf;
+
     /// The number of initial output samples to discard
     size_t m_samplesToDiscard;
 
@@ -51,6 +54,9 @@ struct RubberBandStretcherBuf : public Unit {
 
     /// The next sample to write to
     size_t m_writePtr;
+
+    /// The previous trigger
+    float m_prevTrigger;
 };
 
 void RubberBandStretcherBuf_Ctor(RubberBandStretcherBuf *unit);
