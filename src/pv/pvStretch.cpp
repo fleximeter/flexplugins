@@ -122,8 +122,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     const size_t stftBufFftSize = static_cast<size_t>(bufData[0]);
     const size_t stftBufHopSize = static_cast<size_t>(bufData[1] * stftBufFftSize);  // in frames, not fraction
     const int stftBufWinType = static_cast<int>(bufData[2]);  // -1, 0, or 1. This information is probably extraneous.
-    //std::cout << "FFT size: " << stftBufFftSize << " Hop size: " << stftBufHopSize << " Win type: " << stftBufWinType << " STFT frames " << stftFrames << "\n";
-
+    
     if (stftBufFftSize != buf->samples) {
         OUT0(0) = -1.f;
         std::cout << "WARNING: The FFT size of the STFT buffer (" << stftBufFftSize << 
@@ -150,8 +149,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     float startPos = sc_clip<float>(IN0(2), 0.0, 1.0);
     const float rate = IN0(3);
     const float loop = IN0(4);
-    // std::cout << "Rate: " << rate << " Loop: " << loop << "\n";
-
+    
     if (startPos != unit->m_startPos) {
         unit->m_startPos = startPos;
         unit->m_firstFrame = true;
@@ -162,7 +160,6 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
 
     // First we need to figure out where we are, and if that means we need to loop or quit.
     float newPos = unit->m_pos + rate;
-    float debugNewPos = newPos;
     if (newPos > stftFrames - 1) {
         if (loop && rate > 0) {
             unit->m_firstFrame = true;
@@ -218,7 +215,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
         size_t phaseLock = sc_clip(static_cast<size_t>(IN0(5)), 0, 2);
         SCPolarBuf *p = ToPolarApx(buf);
         size_t roundedPos = static_cast<size_t>(std::round(newPos));
-        //std::cout << "New pos: " << intPos << "\n";
+    
         // If we're right smack on a specific FFT frame, we don't
         // need to do any magnitude or frequency interpolation, so
         // we only need the current and previous FFT frames from the buffer.
@@ -234,7 +231,6 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             // Render the output FFT frame
             switch (phaseLock) {
                 case 1:
-                    // std::cout <<"P stretch\n";
                     Stretch2Puckette(
                         unit->m_frameNext, 
                         unit->m_framePrev1, 
@@ -245,7 +241,6 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
                     );
                     break;
                 case 2:
-                    // std::cout <<"LD stretch\n";
                     Stretch2LarocheDolson(
                         unit->m_frameNext, 
                         unit->m_framePrev1, 
@@ -289,7 +284,6 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             // Render the output FFT frame
             switch (phaseLock) {
                 case 1:
-                    // std::cout <<"P stretch\n";
                     Stretch3Puckette(
                         unit->m_frameNext, 
                         unit->m_framePrev1, 
@@ -302,7 +296,6 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
                     );
                     break;
                 case 2:
-                    // std::cout <<"LD stretch\n";
                     Stretch3LarocheDolson(
                         unit->m_frameNext, 
                         unit->m_framePrev1, 
@@ -422,6 +415,9 @@ void Stretch2Puckette(
             std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
             prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
         }
+        
+        // Compute the new phase
+        outFrame->bin[xxk].phase = prevPhase + hopSize * instantaneousFreq;
     }
 }
 
@@ -817,9 +813,6 @@ void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbi
 
 Peak::Peak(size_t peak) : peak(peak) {}
 Peak::Peak(size_t peak, size_t leftValley, size_t rightValley) : peak(peak), leftValley(leftValley), rightValley(rightValley) {}
-
-#define SHIFT(arr, idx, val) \
-    for (size_t xxi = )
 
 PeakFinder::PeakFinder(size_t fftSize, size_t radius) {
     m_maxSize = fftSize/2-1;
