@@ -25,6 +25,9 @@ A formant-preserving phase vocoder pitch shifter using the [RubberBand library](
 ### RubberBandStretcher
 A phase vocoder pitch shifter and time stretcher using the [RubberBand library](https://breakfastquay.com/rubberband/).
 
+### RubberBandStretcherBuf
+A phase vocoder pitch shifter and time stretcher using the [RubberBand library](https://breakfastquay.com/rubberband/). This version writes the stretched audio to a buffer rather than outputting it directly.
+
 ### ImpulseDropout
 A modified version of Impulse that randomly drops a percentage of impulses, producing a stuttering effect.
 

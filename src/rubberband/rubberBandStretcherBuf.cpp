@@ -24,7 +24,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "rubberBandStretcherBuf.hpp"
 #include <iostream>
-#include <limits>
 #include "SC_PlugIn.h"
 
 extern InterfaceTable *ft;

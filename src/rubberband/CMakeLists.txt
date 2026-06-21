@@ -35,9 +35,9 @@ target_link_libraries(rubberBandStretcherBuf PRIVATE rubberband_lib)
 if(SUPERNOVA)
     add_library(rubberband_supernova MODULE rubberband.cpp)
     target_link_libraries(rubberband_supernova PRIVATE 
-        rubberband_lib 
         rubberBandPS 
         rubberBandStretcher
+        rubberBandStretcherBuf
     )
     set_property(TARGET rubberband_supernova
                  PROPERTY COMPILE_DEFINITIONS SUPERNOVA)
