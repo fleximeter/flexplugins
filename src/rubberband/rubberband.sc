@@ -56,7 +56,7 @@ RubberBandStretcherBuf : UGen {
             timeRatio=1.0, pitchRatio=1.0, formantRatio=0.0, transientsMode=0, 
             detectorMode=0, phaseMode=0, pitchQuality=0, windowOption=0, 
             smoothing=0, engine=0, doneAction=0;
-        ^this.multiNew('audio', in, bufnum, offset, recLevel, preLeel, run, loop, trigger, 
+        ^this.multiNew('audio', in, bufnum, offset, recLevel, preLevel, run, loop, trigger, 
             timeRatio, pitchRatio, formantRatio, transientsMode,
             detectorMode, phaseMode, pitchQuality, windowOption, 
             smoothing, engine, doneAction);
