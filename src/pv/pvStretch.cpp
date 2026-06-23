@@ -286,10 +286,10 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
                 case 1:
                     Stretch3Puckette(
                         unit->m_frameNext, 
-                        unit->m_framePrev1, 
+                        unit->m_framePrev1,
                         unit->m_framePrev2, 
                         p, 
-                        unit->m_outFramePrev, 
+                        unit->m_outFramePrev,
                         newPos-static_cast<float>(lo), 
                         stftBufFftSize, 
                         stftBufHopSize
@@ -400,15 +400,9 @@ void Stretch2Puckette(
         // in order to "lock" phases of adjacent bins together.
         float prevPhase = 0.0;
         if (xxk == 0) {
-            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->dc, 0.f);
-            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
-            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            prevPhase = outFramePrev->bin[xxk].phase;
         } else if (xxk == fftSize/2-2) {
-            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->nyq, 0.f);
-            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            prevPhase = outFramePrev->bin[xxk].phase;
         } else {
             std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
             std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
@@ -614,15 +608,9 @@ void Stretch3Puckette(
         // in order to "lock" phases of adjacent bins together.
         float prevPhase = 0.0;
         if (xxk == 0) {
-            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->dc, 0.f);
-            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
-            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            prevPhase = outFramePrev->bin[xxk].phase;
         } else if (xxk == fftSize/2-2) {
-            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->nyq, 0.f);
-            prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
+            prevPhase = outFramePrev->bin[xxk].phase;
         } else {
             std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
             std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
