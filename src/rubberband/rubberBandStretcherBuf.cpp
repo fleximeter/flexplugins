@@ -29,13 +29,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 extern InterfaceTable *ft;
 
 void RubberBandStretcherBuf_Ctor(RubberBandStretcherBuf *unit) {
-
-    /* arg in, bufnum=0, offset=0.0, recLevel=1.0, preLevel=0.0, run=1.0, loop=1.0, trigger=1.0, 
-        8    timeRatio=1.0, pitchRatio=1.0, formantRatio=0.0, transientsMode=0, 
-        12    detectorMode=0, phaseMode=0, pitchQuality=0, windowOption=0, 
-        16    smoothing=0, engine=0, doneAction=0;
-    */
-
     float timeRatio = IN0(8);
     float pitchRatio = IN0(9);
     float formantRatio = IN0(10);
@@ -159,12 +152,6 @@ void RubberBandStretcherBuf_Dtor(RubberBandStretcherBuf *unit) {
 }
 
 void RubberBandStretcherBuf_next(RubberBandStretcherBuf *unit, int inNumSamples) {
-    /* arg in, bufnum=0, offset=0.0, recLevel=1.0, preLevel=0.0, run=1.0, loop=1.0, trigger=1.0, 
-        8    timeRatio=1.0, pitchRatio=1.0, formantRatio=0.0, transientsMode=0, 
-        12    detectorMode=0, phaseMode=0, pitchQuality=0, windowOption=0, 
-        16    smoothing=0, engine=0, doneAction=0;
-    */
-
     // Step 1: acquire the sound buffer
     const SndBuf *writeBuf = unit->m_buf;
     if (!writeBuf) {
