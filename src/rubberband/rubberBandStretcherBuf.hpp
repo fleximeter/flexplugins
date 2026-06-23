@@ -1,0 +1,64 @@
+/*
+File: rubberBandStretcherBuf.hpp
+Author: Jeff Martin
+
+Description:
+A high-quality formant preserving pitch shifter and time stretcher using the RubberBand library.
+
+Copyright © 2026 by Jeffrey Martin. All rights reserved.
+Website: https://www.jeffreymartincomposer.com
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#pragma once
+
+#include "SC_Unit.h"
+#include "rubberband/RubberBandStretcher.h"
+
+struct RubberBandStretcherBuf : public Unit {
+    /// The stretcher
+    RubberBand::RubberBandStretcher* m_stretcher;
+
+    /// A buffer
+    float *m_localBuf;
+
+    /// The number of initial output samples to discard
+    size_t m_samplesToDiscard;
+
+    // A collection of settings for the RubberBand stretcher
+    float m_timeRatio;
+    float m_pitchRatio;
+    float m_formantRatio;
+    int m_transientsMode;
+    int m_detectorOption;
+    int m_phaseOption;
+    int m_pitchQuality;
+
+    /// The index of the buffer with STFT data
+    float m_fbufnum;
+
+    /// The audio buffer to write the stretched audio to
+    SndBuf *m_buf;
+
+    /// The next sample to write to
+    size_t m_writePtr;
+
+    /// The previous trigger
+    float m_prevTrigger;
+};
+
+void RubberBandStretcherBuf_Ctor(RubberBandStretcherBuf *unit);
+void RubberBandStretcherBuf_Dtor(RubberBandStretcherBuf *unit);
+void RubberBandStretcherBuf_next(RubberBandStretcherBuf *unit, int inNumSamples);

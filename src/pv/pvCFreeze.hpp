@@ -1,9 +1,9 @@
 /*
-File: rubberband.cpp
+File: pvCFreeze.hpp
 Author: Jeff Martin
 
 Description:
-A high quality, formant-preserving live pitch shifter and time stretcher using the RubberBand library.
+Jean-François Charles spectral freeze
 
 Copyright © 2026 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com
@@ -22,16 +22,20 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_PlugIn.h"
-#include "rubberBandPS.hpp"
-#include "rubberBandStretcher.hpp"
-#include "rubberBandStretcherBuf.hpp"
+#pragma once
+#include "SC_Unit.h"
 
-InterfaceTable *ft;
+struct PV_CFreeze : public Unit {
+    int mNumBins;    // The number of FFT bins
+    int mNumFrames;  // The number of candidate FFT frames to maintain
+    float *mMags;    // The 2D array of FFT mags
+    float *mDc;      // The 1D array of FFT DC values
+    float *mNyq;     // The 1D array of FFT Nyquist values
+    float *mPhase;   // The most recent phase array
+    float *mPhaseDiffs;  // The 2D array of FFT phase differences
+    size_t mWritePtr;   // The write pointer
+};
 
-PluginLoad(RubberBandPlugins) {
-    ft = inTable;
-    DefineDtorUnit(RubberBandPS);
-    DefineDtorUnit(RubberBandStretcher);
-    DefineDtorUnit(RubberBandStretcherBuf);
-}
+void PV_CFreeze_next(PV_CFreeze *unit, int inNumSamples);
+void PV_CFreeze_Ctor(PV_CFreeze *unit);
+void PV_CFreeze_Dtor(PV_CFreeze *unit);

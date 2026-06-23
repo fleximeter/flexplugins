@@ -1,7 +1,7 @@
 # This file (and the other CMakeLists.txt files in this repo)
 # are adapted from the prototype CMakeLists.txt provided with the SuperCollider plugin starter code.
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.20)
 project(flexplugins)
 
 # To make a ZIP archive
@@ -124,13 +124,17 @@ install(FILES
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )
 install(FILES
+    src/generators/ImpulseDropout.schelp
+    src/generators/ImpulseJitter.schelp
     src/generators/LoopPhasor.schelp
     src/pv/PV_CFreeze.schelp
     src/pv/PV_MagMirror.schelp
     src/pv/PV_MagSqueeze.schelp
+    src/pv/PV_PlayBufStretch.schelp
     src/pv/PV_MagXFade.schelp
     src/rubberband/RubberBandPS.schelp
     src/rubberband/RubberBandStretcher.schelp
+    src/rubberband/RubberBandStretcherBuf.schelp
     DESTINATION HelpSource/Classes
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )

@@ -1,0 +1,48 @@
+class:: ImpulseJitter
+summary:: Modified Impulse with jitter
+related:: Classes/Impulse, Classes/Dust
+categories:: Libraries>FlexUGens, UGens>Generators>Stochastic
+
+
+Description::
+
+ImpulseJitter is a modified version of Impulse that adds some jitter to each impulse position,
+controlled by the jitterFrac argument. For example, if jitterFrac = 0.2, each impulse can be
+randomly shifted in time by up to 0.2 of the block size.
+
+classmethods::
+
+method::ar, kr
+
+argument::freq
+Frequency in Hertz. freq may be negative.
+
+argument::phase
+Phase offset in cycles (0..1). Staying in this range offers a slight efficiency advantage,
+though phase offsets outside this range are supported and wrapped internally.
+
+argument::jitterFrac
+The maximum fraction of the block size to allow for jitter.
+
+argument::mul
+The output will be multiplied by this value.
+
+argument::add
+This value will be added to the output.
+
+Examples::
+
+code::
+(
+SynthDef(\jitter, {
+	arg freq, jitterFrac, amp;
+    var sig;
+	sig = ImpulseJitter.ar(freq, 0.0, jitterFrac, amp);
+    sig = LPF.ar(sig, freq);
+    sig = LeakDC.ar(sig);
+	Out.ar(0, sig);
+}).add;
+
+Synth(\jitter, [\freq, 440.0, \jitterFrac, 0.1, \amp, -12.dbamp]);
+)
+::

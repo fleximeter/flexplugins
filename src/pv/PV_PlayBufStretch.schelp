@@ -1,0 +1,126 @@
+class:: PV_PlayBufStretch
+summary:: Phase vocoder buffer player for time stretching
+related:: Classes/PV_RecordBuf, Classes/PV_BufRd
+categories:: Libraries>FlexUGens, UGens>FFT
+related:: Guides/FFT-Overview
+
+Description::
+
+PV_PlayBufStretch is a phase vocoder buffer player for time stretching. It differs from link::Classes/PV_BufRd:: 
+in that it has a phase locking feature. Phase locking is a strategy that is used to reduce 
+"phasiness"--a reverberant sound caused by phase misalignment in adjacent bins. 
+The idea is that you want the phases of peak bins to dominate the phases of adjacent bins. 
+This makes sense intuitively because we know that in an FFT, the energy of a partial is spread 
+across several bins. PV_PlayBufStretch implements two classic phase locking algorithms--an 
+algorithm by Miller Puckette,footnote::Puckette, Miller. "Phase-locked vocoder." 1995 IEEE Workshop on Applications of Signal Processing to Audio and Acoustics (1995), 222-225.:: 
+and a later peak-picking algorithm (called "identity phase locking") 
+by Jean Laroche and Mark Dolson.footnote::Laroche, Jean, and Mark Dolson. "Improved Phase Vocoder Time-Scale Modification of Audio." IEEE Transactions on Speech and Audio Processing, 7, no. 3 (1999), 323-332.::
+
+You will want to choose the algorithm based on the sound it produces. In some cases, you may not 
+wish to use phase locking at all. Traditionally, one would use a hop size of 0.25 or less along with an 
+appropriate window (like the Hann window) in the STFT. Laroche and Dolson write that for identity 
+phase locking, a hop size of 0.5 is feasible.
+
+classmethods::
+
+method::new
+
+argument::buffer
+The FFT buffer
+
+argument::stftBuffer
+The buffer with STFT data created by PV_RecordBuf
+
+argument::startPos
+The start position (0.0 to 1.0). Normally you would set this once and let it be. 
+However, you can change it at any time--if it changes, playback will jump immediately 
+to the new start position. Keep in mind that the first frame played does not use phase 
+vocoder computation, so you may or may not like the sound produced by changing the 
+start position during playback.
+
+This value is clipped internally to the range [0.0, 1.0].
+
+argument::rate
+The playback rate. 1.0 is normal; slower rates result in a time stretch, and faster rates 
+result in time shrink. Negative rates result in backwards playback.
+
+argument::loop
+Whether (1.0) or not (0.0) to loop when the end of the stftBuffer is reached
+
+argument::phaseLock
+The phase locking strategy to adopt. 0.0 means no phase locking, 1.0 means Puckette-style 
+phase locking, and 2.0 means Laroche/Dolson identity phase locking.
+
+argument::peakRadius
+The radius for the peak-picker in the Laroche/Dolson identity phase locking 
+algorithm. A bin is a peak if its magnitude is greater than any magnitude of the 
+strong::peakRadius:: bins to either side. This parameter can only be set on construction, 
+and is clipped internally to the range [1, 32]. Laroche and Dolson suggest a radius of 2, 
+which is the default here.
+
+argument::doneAction
+The action to take after playback is completed
+
+Examples::
+
+code::
+(
+var sf;
+p = ExampleFiles.child;
+sf = SoundFile.new(p);
+sf.openRead;
+sf.close;
+// The size of the buffer is 3 + fftSize * numStftFrames.
+y = Buffer.alloc(Server.default, sf.duration.calcPVRecSize(2048, 0.25, s.sampleRate));
+z = Buffer.read(Server.default, p);
+)
+
+(
+SynthDef(\rec, {
+	arg recBuf, soundBuf;
+	var in, chain;
+	Line.kr(dur: BufDur.kr(soundBuf), doneAction: Done.freeSelf);
+	in = PlayBuf.ar(1, soundBuf, BufRateScale.ir(soundBuf));
+	chain = FFT(LocalBuf(2048), in, 0.25, 1);
+	PV_RecordBuf(chain, recBuf, 0, 1, 0, 0.25, 0);
+}).add;
+
+SynthDef(\play2, {
+	arg recBuf, rate=1, phaseLock=0, loop=0, startPos=0;
+	var sig, chain;
+	// Note that you must specify the appropriate hop size in FFTTrigger.
+	// Also note that the FFT size must be the same as the FFT size of
+	// the original analysis.
+	chain = FFTTrigger(LocalBuf(2048), 0.25, 1.0);
+	chain = PV_PlayBufStretch(chain, recBuf, startPos, rate, loop, phaseLock, 2.0, Done.freeSelf);
+	// Use the same window type that was used for analysis.
+	sig = IFFT(chain, 1);
+	Out.ar(0, Pan2.ar(sig));
+}).add;
+)
+
+Synth(\rec, [\recBuf, y, \soundBuf, z]);
+b = Synth(\play2, [\recBuf, y, \rate, 0.5, \loop, 1.0, \startPos, 0.0, \phaseLock, 2.0]);
+
+// A more unusual take. Here we modulate the playback rate, and it can go negative.
+(
+{
+	var sig, chain;
+	chain = FFTTrigger(LocalBuf(2048), 0.25, 1.0);
+	chain = PV_PlayBufStretch(chain, y, 0.0, LFTri.kr(0.1), 1.0, 0.0);
+	sig = IFFT(chain, 1);
+	sig = Pan2.ar(sig);
+}.play;
+)
+
+// Another unusual take, where we abruptly change the playback start point repeatedly.
+(
+{
+	var sig, chain;
+	chain = FFTTrigger(LocalBuf(2048), 0.25, 1.0);
+	chain = PV_PlayBufStretch(chain, y, LFPulse.kr(0.25).range(0.2, 0.6), 0.25, 1.0, 0.0);
+	sig = IFFT(chain, 1);
+	sig = Pan2.ar(sig);
+}.play;
+)
+::

@@ -1,11 +1,11 @@
 /*
-File: rubberband.cpp
+File: arrayheap.hpp
 Author: Jeff Martin
 
 Description:
-A high quality, formant-preserving live pitch shifter and time stretcher using the RubberBand library.
+A simple array-based heap
 
-Copyright © 2026 by Jeffrey Martin. All rights reserved.
+Copyright © 2025 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com
 
 This program is free software: you can redistribute it and/or modify
@@ -22,16 +22,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_PlugIn.h"
-#include "rubberBandPS.hpp"
-#include "rubberBandStretcher.hpp"
-#include "rubberBandStretcherBuf.hpp"
+#pragma once
+#include <cstddef>
 
-InterfaceTable *ft;
+/// A min heap for ints.
+typedef struct {
+    int* heap;
+    size_t size;
+    size_t maxSize;
+} IntMinHeap;
 
-PluginLoad(RubberBandPlugins) {
-    ft = inTable;
-    DefineDtorUnit(RubberBandPS);
-    DefineDtorUnit(RubberBandStretcher);
-    DefineDtorUnit(RubberBandStretcherBuf);
-}
+/// Inserts into the heap
+int heapInsert(IntMinHeap* heap, int data);
+
+/// Removes from the heap and returns the value popped. Returns 0 if the heap is empty.
+int heapPop(IntMinHeap* heap);
+
+/// Safe peek at the top of the heap
+int heapPeek(IntMinHeap* heap);

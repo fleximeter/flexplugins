@@ -1,0 +1,50 @@
+class:: ImpulseDropout
+summary:: Modified Impulse with dropout
+related:: Classes/Impulse, Classes/Dust
+categories:: Libraries>FlexUGens, UGens>Generators>Stochastic
+
+
+Description::
+
+ImpulseDropout is a modified version of Impulse that randomly drops a percentage of impulses,
+controlled by the dropFrac argument. For example, if dropFrac = 0.2, 0.2 of the impulses
+will be zeroed out per audio block. The impulses that are zeroed out are chosen randomly.
+
+classmethods::
+
+method::ar, kr
+
+argument::freq
+Frequency in Hertz. freq may be negative.
+
+argument::phase
+Phase offset in cycles (0..1). Staying in this range offers a slight efficiency advantage,
+though phase offsets outside this range are supported and wrapped internally.
+
+argument::dropFrac
+The percentage of impulses that will be randomly dropped (between 0.0 and 1.0).
+Values greater than or equal to 1.0 result in silence (all impulses are dropped),
+and values less than or equal to 0.0 produce the same output as the Impulse UGen.
+
+argument::mul
+The output will be multiplied by this value.
+
+argument::add
+This value will be added to the output.
+
+Examples::
+
+code::
+(
+SynthDef(\dropout, {
+	arg freq, dropFrac, amp;
+    var sig;
+	sig = ImpulseDropout.ar(freq, 0.0, dropFrac, amp);
+    sig = LPF.ar(sig, freq);
+    sig = LeakDC.ar(sig);
+	Out.ar(0, sig);
+}).add;
+
+Synth(\dropout, [\freq, 440.0, \dropFrac, 0.4, \amp, -12.dbamp]);
+)
+::

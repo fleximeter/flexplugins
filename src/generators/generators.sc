@@ -20,6 +20,32 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// ImpulseDropout is a version of Impulse that randomly drops a percentage of the impulses.
+ImpulseDropout : UGen {
+    *ar {
+        arg freq = 440.0, phase = 0.0, dropFrac = 0.0, mul = 1.0, add = 0.0;
+        ^this.multiNew('audio', freq, phase, dropFrac).madd(mul, add);
+    }
+    *kr {
+        arg freq = 440.0, phase = 0.0, dropFrac = 0.0, mul = 1.0, add = 0.0;
+        ^this.multiNew('control', freq, phase, dropFrac).madd(mul, add);
+    }
+    signalRange { ^\unipolar }
+}
+
+// ImpulseJitter is a version of Impulse that allows the addition of jitter to each impulse.
+ImpulseJitter : UGen {
+    *ar {
+        arg freq = 440.0, phase = 0.0, jitterFrac = 0.0, mul = 1.0, add = 0.0;
+        ^this.multiNew('audio', freq, phase, jitterFrac).madd(mul, add);
+    }
+    *kr {
+        arg freq = 440.0, phase = 0.0, jitterFrac = 0.0, mul = 1.0, add = 0.0;
+        ^this.multiNew('control', freq, phase, jitterFrac).madd(mul, add);
+    }
+    signalRange { ^\unipolar }
+}
+
 // LoopPhasor is a variant of Phasor with the following changes:
 // 1. It has an embedded loop with start and end position (for playing samples with loop points).
 //    This allows the LoopPhasor to be used for playing a Buffer normally, and then you only loop within a subset of the Buffer. 

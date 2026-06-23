@@ -1,9 +1,9 @@
 /*
-File: rubberband.cpp
+File: rubberBandPS.hpp
 Author: Jeff Martin
 
 Description:
-A high quality, formant-preserving live pitch shifter and time stretcher using the RubberBand library.
+A high-quality formant preserving pitch shifter using the RubberBand library.
 
 Copyright © 2026 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com
@@ -22,16 +22,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_PlugIn.h"
-#include "rubberBandPS.hpp"
-#include "rubberBandStretcher.hpp"
-#include "rubberBandStretcherBuf.hpp"
+#pragma once
+#include "SC_Unit.h"
+#include "rubberband/RubberBandLiveShifter.h"
+#include "ringbuffer.hpp"
 
-InterfaceTable *ft;
+struct RubberBandPS : public Unit {
+    RubberBand::RubberBandLiveShifter* m_shifter;
+    RingBuffer<float>* m_sendBuffer;
+    RingBuffer<float>* m_receiveBuffer;
+    float *m_shiftBufferIn;
+    float *m_shiftBufferOut;
+    size_t m_blockSize;
+    size_t m_shifterBlockSize;
+};
 
-PluginLoad(RubberBandPlugins) {
-    ft = inTable;
-    DefineDtorUnit(RubberBandPS);
-    DefineDtorUnit(RubberBandStretcher);
-    DefineDtorUnit(RubberBandStretcherBuf);
-}
+void RubberBandPS_Ctor(RubberBandPS *unit);
+void RubberBandPS_Dtor(RubberBandPS *unit);
+void RubberBandPS_next(RubberBandPS *unit, int inNumSamples);

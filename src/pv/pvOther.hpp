@@ -1,9 +1,9 @@
 /*
-File: rubberband.cpp
+File: pvOther.hpp
 Author: Jeff Martin
 
 Description:
-A high quality, formant-preserving live pitch shifter and time stretcher using the RubberBand library.
+A collection of PV UGens for SuperCollider.
 
 Copyright © 2026 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com
@@ -22,16 +22,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_PlugIn.h"
-#include "rubberBandPS.hpp"
-#include "rubberBandStretcher.hpp"
-#include "rubberBandStretcherBuf.hpp"
+#pragma once
+#include "SC_Unit.h"
 
-InterfaceTable *ft;
+struct PV_MagSqueeze : public Unit {};
+void PV_MagSqueeze_next(PV_MagSqueeze *unit, int inNumSamples);
+void PV_MagSqueeze_Ctor(PV_MagSqueeze *unit);
 
-PluginLoad(RubberBandPlugins) {
-    ft = inTable;
-    DefineDtorUnit(RubberBandPS);
-    DefineDtorUnit(RubberBandStretcher);
-    DefineDtorUnit(RubberBandStretcherBuf);
-}
+struct PV_MagMirror : public Unit {};
+void PV_MagMirror_next(PV_MagMirror *unit, int inNumSamples);
+void PV_MagMirror_Ctor(PV_MagMirror *unit);
+
+struct PV_MagXFade : public Unit {};
+void PV_MagXFade_next(PV_MagXFade *unit, int inNumSamples);
+void PV_MagXFade_Ctor(PV_MagXFade *unit);

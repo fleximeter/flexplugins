@@ -1,9 +1,9 @@
 /*
-File: generators.cpp
+File: impulseJitter.hpp
 Author: Jeff Martin
 
 Description:
-A collection of SuperCollider generator UGens
+The ImpulseJitter UGen
 
 Copyright © 2025 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com
@@ -22,16 +22,22 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#pragma once
 #include "SC_PlugIn.h"
-#include "loopPhasor.hpp"
-#include "impulseDropout.hpp"
-#include "impulseJitter.hpp"
+#include "arrayheap.hpp"
 
-InterfaceTable *ft;
+#define HEAP_MAX_SIZE 1024
+// Represents an ImpulseJitter UGen.
+struct ImpulseJitter : public Unit {
+    double mPhase, mPhaseOffset, mPhaseIncrement;
+    float mFreqMul;
+    IntMinHeap mImpulseHeap;
+};
 
-PluginLoad(flexplugin_generators) {
-    ft = inTable;
-    DefineSimpleUnit(ImpulseDropout);
-    DefineDtorUnit(ImpulseJitter);
-    DefineSimpleUnit(LoopPhasor);
-}
+void ImpulseJitter_Ctor(ImpulseJitter* unit);
+void ImpulseJitter_Dtor(ImpulseJitter* unit);
+void ImpulseJitter_next_aa(ImpulseJitter* unit, int inNumSamples);
+void ImpulseJitter_next_ai(ImpulseJitter* unit, int inNumSamples);
+void ImpulseJitter_next_ak(ImpulseJitter* unit, int inNumSamples);
+void ImpulseJitter_next_ki(ImpulseJitter* unit, int inNumSamples);
+void ImpulseJitter_next_kk(ImpulseJitter* unit, int inNumSamples);
