@@ -2,7 +2,7 @@
 # are adapted from the prototype CMakeLists.txt provided with the SuperCollider plugin starter code.
 
 cmake_minimum_required(VERSION 3.20)
-project(flexplugins)
+project(flexplugins VERSION 0.1.3)
 
 # To make a ZIP archive
 set(CPACK_GENERATOR "ZIP")
