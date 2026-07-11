@@ -361,7 +361,10 @@ void Stretch2(
         float instantaneousFreq = omegaK + phaseInc/hopSize;
         
         // Compute the new phase
-        outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        outFrame->bin[xxk].phase = sc_wrap(
+            outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+            0.f,
+            static_cast<float>(twopi));
     }
 }
 
@@ -411,7 +414,10 @@ void Stretch2Puckette(
         }
         
         // Compute the new phase
-        outFrame->bin[xxk].phase = prevPhase + hopSize * instantaneousFreq;
+        outFrame->bin[xxk].phase = sc_wrap(
+            prevPhase + static_cast<float>(hopSize * instantaneousFreq),
+            0.f,
+            static_cast<float>(twopi));
     }
 }
 
@@ -454,7 +460,10 @@ void Stretch2LarocheDolson(
             double instantaneousFreq = omegaK + phaseInc/hopSize;
 
             // Compute the phase
-            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+            outFrame->bin[xxk].phase = sc_wrap(
+                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+                0.f,
+                static_cast<float>(twopi));
         }
     } else {
         // Update any bins that occur below the lowest peak's region of influence
@@ -468,7 +477,10 @@ void Stretch2LarocheDolson(
             double instantaneousFreq = omegaK + phaseInc/hopSize;
 
             // Compute the phase
-            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+            outFrame->bin[xxk].phase = sc_wrap(
+                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+                0.f,
+                static_cast<float>(twopi));
         }
 
         // Update any bins that occur above the highest peak's region of influence
@@ -482,7 +494,10 @@ void Stretch2LarocheDolson(
             double instantaneousFreq = omegaK + phaseInc/hopSize;
 
             // Compute the phase
-            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+            outFrame->bin[xxk].phase = sc_wrap(
+                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+                0.f,
+                static_cast<float>(twopi));
         }
 
         // Update all other peaks
@@ -498,16 +513,25 @@ void Stretch2LarocheDolson(
             double instantaneousFreq = omegaK + phaseInc/hopSize;
 
             // Compute the phase
-            outFrame->bin[peak.peak].phase = outFramePrev->bin[peak.peak].phase + hopSize * instantaneousFreq;
+            outFrame->bin[peak.peak].phase = sc_wrap(
+                outFramePrev->bin[peak.peak].phase + static_cast<float>(hopSize * instantaneousFreq),
+                0.f,
+                static_cast<float>(twopi));
 
             // Then we update the phases of all other peaks
             for (size_t xxo = peak.leftValley; xxo < peak.peak; xxo++) {
                 outFrame->bin[xxo].mag = frame->bin[xxo].mag;
-                outFrame->bin[xxo].phase = outFrame->bin[peak.peak].phase + frame->bin[xxo].phase - frame->bin[peak.peak].phase;
+                outFrame->bin[xxo].phase = sc_wrap(
+                    outFrame->bin[peak.peak].phase + frame->bin[xxo].phase - frame->bin[peak.peak].phase,
+                    0.f,
+                    static_cast<float>(twopi));
             }
             for (size_t xxo = peak.peak + 1; xxo <= peak.rightValley; xxo++) {
                 outFrame->bin[xxo].mag = frame->bin[xxo].mag;
-                outFrame->bin[xxo].phase = outFrame->bin[peak.peak].phase + frame->bin[xxo].phase - frame->bin[peak.peak].phase;
+                outFrame->bin[xxo].phase = sc_wrap(
+                    outFrame->bin[peak.peak].phase + frame->bin[xxo].phase - frame->bin[peak.peak].phase,
+                    0.f,
+                    static_cast<float>(twopi));
             }
         }
     }
@@ -556,7 +580,10 @@ void Stretch3(
         float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
         
         // Compute the new phase
-        outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+        outFrame->bin[xxk].phase = sc_wrap(
+            outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+            0.f,
+            static_cast<float>(twopi));
     }
 }
 
@@ -619,7 +646,10 @@ void Stretch3Puckette(
         }
         
         // Compute the new phase
-        outFrame->bin[xxk].phase = prevPhase + hopSize * instantaneousFreq;
+        outFrame->bin[xxk].phase = sc_wrap(
+            prevPhase + static_cast<float>(hopSize * instantaneousFreq),
+            0.f,
+            static_cast<float>(twopi));
     }
 }
 
@@ -683,7 +713,10 @@ static void Stretch3LarocheDolson(
             double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
             
             // Compute the new phase
-            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+            outFrame->bin[xxk].phase = sc_wrap(
+                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+                0.f,
+                static_cast<float>(twopi));
         }
     } else {
         // Update any bins that occur below the lowest peak's region of influence
@@ -706,7 +739,10 @@ static void Stretch3LarocheDolson(
             double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
 
             // Compute the phase
-            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+            outFrame->bin[xxk].phase = sc_wrap(
+                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+                0.f,
+                static_cast<float>(twopi));
         }
 
         // Update any bins that occur above the highest peak's region of influence
@@ -729,7 +765,10 @@ static void Stretch3LarocheDolson(
             double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
 
             // Compute the phase
-            outFrame->bin[xxk].phase = outFramePrev->bin[xxk].phase + hopSize * instantaneousFreq;
+            outFrame->bin[xxk].phase = sc_wrap(
+                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+                0.f,
+                static_cast<float>(twopi));
         }
         
         for (size_t xxn = 0; xxn < peakFinder->size(); xxn++) {
@@ -753,16 +792,25 @@ static void Stretch3LarocheDolson(
             double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
 
             // Compute the phase
-            outFrame->bin[peak.peak].phase = outFramePrev->bin[peak.peak].phase + hopSize * instantaneousFreq;
+            outFrame->bin[peak.peak].phase = sc_wrap(
+                outFramePrev->bin[peak.peak].phase + static_cast<float>(hopSize * instantaneousFreq),
+                0.f,
+                static_cast<float>(twopi));
 
             // Then we update all bins in the region of influence
             for (size_t xxo = peak.leftValley; xxo < peak.peak; xxo++) {
                 outFrame->bin[xxo].mag = INTERP(framePrev1->bin[xxo].mag, frameNext->bin[xxo].mag, pos);
-                outFrame->bin[xxo].phase = outFrame->bin[peak.peak].phase + cframe->bin[xxo].phase - cframe->bin[peak.peak].phase;
+                outFrame->bin[xxo].phase = sc_wrap(
+                    outFrame->bin[peak.peak].phase + cframe->bin[xxo].phase - cframe->bin[peak.peak].phase,
+                    0.f,
+                    static_cast<float>(twopi));
             }
             for (size_t xxo = peak.peak + 1; xxo <= peak.rightValley; xxo++) {
                 outFrame->bin[xxo].mag = INTERP(framePrev1->bin[xxo].mag, frameNext->bin[xxo].mag, pos);
-                outFrame->bin[xxo].phase = outFrame->bin[peak.peak].phase + cframe->bin[xxo].phase - cframe->bin[peak.peak].phase;
+                outFrame->bin[xxo].phase = sc_wrap(
+                    outFrame->bin[peak.peak].phase + cframe->bin[xxo].phase - cframe->bin[peak.peak].phase,
+                    0.f,
+                    static_cast<float>(twopi));
             }
         }
     }
