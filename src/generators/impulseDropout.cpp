@@ -51,227 +51,13 @@ static inline float testWrapPhase(double prev_inc, double& phase) {
     }
 }
 
-void ImpulseDropout_next_aa(ImpulseDropout* unit, int inNumSamples) {
-    float* out = OUT(0);
-    float* freqIn = IN(0);
-    float* offIn = IN(1);
-    float dropProbIn = IN0(2);
-    
-    // Collect UGen state
-    double phase = unit->mPhase;
-    double inc = unit->mPhaseIncrement;
-    float freqMul = unit->mFreqMul;
-    double prevOff = unit->mPhaseOffset;
-    
-    RGET
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        float impulseResult = testWrapPhase(inc, phase);
-        // Drop the impulse if necessary
-        if (impulseResult > 0.5f && rgen.frand() < dropProbIn) {
-            impulseResult = 0.f;
-        }
-        double off = static_cast<double>(offIn[xxn]);
-        double offInc = off - prevOff;
-        phase += offInc;
-        testWrapPhase(inc, phase);
-        inc = freqIn[xxn] * freqMul;
-        out[xxn] = impulseResult;
-        phase += inc;
-        prevOff = off;
-    }
+FlexPlugins::ImpulseDropout::ImpulseDropout() {
+    mPhaseIncrement = in0(0) * mFreqMul;
+    mPhaseOffset = in0(1);
+    mFreqMul = static_cast<float>(mRate->mSampleDur);
 
-    unit->mPhase = phase;
-    unit->mPhaseOffset = prevOff;
-    unit->mPhaseIncrement = inc;
-}
-
-void ImpulseDropout_next_ai(ImpulseDropout* unit, int inNumSamples) {
-    float* out = OUT(0);
-    float freqIn = IN0(0);
-    float dropProbIn = IN0(2);
-
-    // Collect UGen state
-    double phase = unit->mPhase;
-    double inc = unit->mPhaseIncrement;
-    float freqMul = unit->mFreqMul;
-
-    RGET
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        float impulseResult = testWrapPhase(inc, phase);
-        // Drop the impulse if necessary
-        if (impulseResult > 0.5f && rgen.frand() < dropProbIn) {
-            impulseResult = 0.f;
-        }
-        inc = freqIn * freqMul;
-        out[xxn] = impulseResult;
-        phase += inc;
-    }
-
-    unit->mPhase = phase;
-    unit->mPhaseIncrement = inc;
-}
-
-void ImpulseDropout_next_ak(ImpulseDropout* unit, int inNumSamples) {
-    float* out = OUT(0);
-    float freqIn = IN0(0);
-    double off = IN0(1);
-    float dropProbIn = IN0(2);
-    
-    // Collect UGen state
-    double phase = unit->mPhase;
-    double inc = unit->mPhaseIncrement;
-    float freqMul = unit->mFreqMul;
-    double prevOff = unit->mPhaseOffset;
-
-    double offSlope = CALCSLOPE(off, prevOff);
-    bool offChanged = offSlope != 0.f;
-
-    RGET
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        float impulseResult = testWrapPhase(inc, phase);
-        // Drop the impulse if necessary
-        if (impulseResult > 0.5f && rgen.frand() < dropProbIn) {
-            impulseResult = 0.f;
-        }
-        if (offChanged) {
-            phase += offSlope;
-            testWrapPhase(inc, phase);
-        }
-        inc = freqIn * freqMul;
-        out[xxn] = impulseResult;
-        phase += inc;
-    }
-
-    unit->mPhase = phase;
-    unit->mPhaseOffset = off;
-    unit->mPhaseIncrement = inc;
-}
-
-void ImpulseDropout_next_ki(ImpulseDropout* unit, int inNumSamples) {
-    float* out = OUT(0);
-    double inc = IN0(0) * unit->mFreqMul;
-    float dropProbIn = IN0(2);
-
-    // Collect UGen state
-    double phase = unit->mPhase;
-    double prevInc = unit->mPhaseIncrement;
-    
-    double incSlope = CALCSLOPE(inc, prevInc);
-    
-    RGET
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        float impulseResult = testWrapPhase(prevInc, phase);
-        // Drop the impulse if necessary
-        if (impulseResult > 0.5f && rgen.frand() < dropProbIn) {
-            impulseResult = 0.f;
-        }
-        out[xxn] = impulseResult;
-        prevInc += incSlope;
-        phase += prevInc;
-    }
-
-    unit->mPhase = phase;
-    unit->mPhaseIncrement = inc;
-}
-
-void ImpulseDropout_next_kk(ImpulseDropout* unit, int inNumSamples) {
-    float* out = OUT(0);
-    double inc = IN0(0) * unit->mFreqMul;
-    double off = IN0(1);
-    float dropProbIn = IN0(2);
-
-    // Collect UGen state
-    double phase = unit->mPhase;
-    double prevInc = unit->mPhaseIncrement;
-    double prevOff = unit->mPhaseOffset;
-    
-    double incSlope = CALCSLOPE(inc, prevInc);
-    double phaseSlope = CALCSLOPE(off, prevOff);
-    bool phOffChanged = phaseSlope != 0.f;
-
-    RGET
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        float impulseResult = testWrapPhase(prevInc, phase);
-        // Drop the impulse if necessary
-        if (impulseResult > 0.5f && rgen.frand() < dropProbIn) {
-            impulseResult = 0.f;
-        }
-        if (phOffChanged) {
-            phase += phaseSlope;
-            testWrapPhase(prevInc, phase);
-        }
-        out[xxn] = impulseResult;
-        prevInc += incSlope;
-        phase += prevInc;
-    }
-
-    unit->mPhase = phase;
-    unit->mPhaseOffset = off;
-    unit->mPhaseIncrement = inc;
-}
-
-void ImpulseDropout_next_ii(ImpulseDropout* unit, int inNumSamples) {
-    float* out = OUT(0);
-    float dropProbIn = IN0(2);
-    
-    // Collect UGen state
-    double inc = unit->mPhaseIncrement;
-    double phase = unit->mPhase;
-        
-    RGET
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        float impulseResult = testWrapPhase(inc, phase);
-        // Drop the impulse if necessary
-        if (impulseResult > 0.5f && rgen.frand() < dropProbIn) {
-            impulseResult = 0.f;
-        }
-        out[xxn] = impulseResult;
-        phase += inc;
-    }
-
-    unit->mPhase = phase;
-}
-
-void ImpulseDropout_next_ik(ImpulseDropout* unit, int inNumSamples) {
-    float* out = OUT(0);
-    double off = IN0(1);
-    float dropProbIn = IN0(2);
-
-    // Collect UGen state
-    double phase = unit->mPhase;
-    double inc = unit->mPhaseIncrement;
-    double prevOff = unit->mPhaseOffset;
-
-    double phaseSlope = CALCSLOPE(off, prevOff);
-    bool phOffChanged = phaseSlope != 0.f;
-
-    RGET
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        float impulseResult = testWrapPhase(inc, phase);
-        // Drop the impulse if necessary
-        if (impulseResult > 0.5f && rgen.frand() < dropProbIn) {
-            impulseResult = 0.f;
-        }
-        if (phOffChanged) {
-            phase += phaseSlope;
-            testWrapPhase(inc, phase);
-        }
-        out[xxn] = impulseResult;
-        phase += inc;
-    }
-
-    unit->mPhase = phase;
-    unit->mPhaseOffset = off;
-}
-
-// Construct the ImpulseDropout
-void ImpulseDropout_Ctor(ImpulseDropout* unit) {
-    unit->mPhaseIncrement = IN0(0) * unit->mFreqMul;
-    unit->mPhaseOffset = IN0(1);
-    unit->mFreqMul = static_cast<float>(unit->mRate->mSampleDur);
-
-    double initOff = unit->mPhaseOffset;
-    double initInc = unit->mPhaseIncrement;
+    double initOff = mPhaseOffset;
+    double initInc = mPhaseIncrement;
     double initPhase = sc_wrap(initOff, 0.0, 1.0);
 
     // Initial phase offset of 0 means output of 1 on first sample.
@@ -279,42 +65,214 @@ void ImpulseDropout_Ctor(ImpulseDropout* unit) {
     if (initPhase == 0.0 && initInc >= 0.0) {
         initPhase = 1.0; // positive frequency trigger/wrap position
     }
-    unit->mPhase = initPhase;
+    mPhase = initPhase;
 
     UnitCalcFunc func;
-    switch (INRATE(0)) {
+    switch (inRate(0)) {
     case calc_FullRate:
-        switch (INRATE(1)) {
+        switch (inRate(1)) {
         case calc_ScalarRate:
-            func = (UnitCalcFunc)ImpulseDropout_next_ai;
+            set_calc_function<ImpulseDropout, &ImpulseDropout::next_ai>();
+            next_ai(1);
             break;
         case calc_BufRate:
-            func = (UnitCalcFunc)ImpulseDropout_next_ak;
+            set_calc_function<ImpulseDropout, &ImpulseDropout::next_ak>();
+            next_ak(1);
             break;
         case calc_FullRate:
-            func = (UnitCalcFunc)ImpulseDropout_next_aa;
+            set_calc_function<ImpulseDropout, &ImpulseDropout::next_aa>();
+            next_aa(1);
             break;
         }
         break;
     case calc_BufRate:
-        if (INRATE(1) == calc_ScalarRate) {
-            func = (UnitCalcFunc)ImpulseDropout_next_ki;
-        } else {
-            func = (UnitCalcFunc)ImpulseDropout_next_kk;
-        }
-        break;
     case calc_ScalarRate:
-        if (INRATE(1) == calc_ScalarRate) {
-            func = (UnitCalcFunc)ImpulseDropout_next_ki;
+        if (inRate(1) == calc_ScalarRate) {
+            set_calc_function<ImpulseDropout, &ImpulseDropout::next_ki>();
+            next_ki(1);
         } else {
-            func = (UnitCalcFunc)ImpulseDropout_next_kk;
+            set_calc_function<ImpulseDropout, &ImpulseDropout::next_kk>();
+            next_ki(1);
         }
         break;
     }
-    unit->mCalcFunc = func;
-    func(unit, 1);
 
-    unit->mPhase = initPhase;
-    unit->mPhaseOffset = initOff;
-    unit->mPhaseIncrement = initInc;
+    mPhase = initPhase;
+    mPhaseOffset = initOff;
+    mPhaseIncrement = initInc;
+}
+
+void FlexPlugins::ImpulseDropout::next_aa(int inNumSamples) {
+    float* outBuf = out(0);
+    const float* freqIn = in(0);
+    const float* offIn = in(1);
+    float dropProbIn = in0(2);
+    
+    // Collect UGen state
+    double phase = mPhase;
+    double inc = mPhaseIncrement;
+    float freqMul = mFreqMul;
+    double prevOff = mPhaseOffset;
+    
+    RGen* rgen = mParent->mRGen;
+    uint32 s1 = rgen->s1;                                                                                               \
+    uint32 s2 = rgen->s2;                                                                                               \
+    uint32 s3 = rgen->s3;
+
+    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+        float impulseResult = testWrapPhase(inc, phase);
+        // Drop the impulse if necessary
+        if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
+            impulseResult = 0.f;
+        }
+        double off = static_cast<double>(offIn[xxn]);
+        double offInc = off - prevOff;
+        phase += offInc;
+        testWrapPhase(inc, phase);
+        inc = freqIn[xxn] * freqMul;
+        outBuf[xxn] = impulseResult;
+        phase += inc;
+        prevOff = off;
+    }
+
+    mPhase = phase;
+    mPhaseOffset = prevOff;
+    mPhaseIncrement = inc;
+}
+
+void FlexPlugins::ImpulseDropout::next_ai(int inNumSamples) {
+    float* outBuf = out(0);
+    float freqIn = in0(0);
+    float dropProbIn = in0(2);
+
+    // Collect UGen state
+    double phase = mPhase;
+    double inc = mPhaseIncrement;
+    float freqMul = mFreqMul;
+
+    RGen* rgen = mParent->mRGen;
+    uint32 s1 = rgen->s1;                                                                                               \
+    uint32 s2 = rgen->s2;                                                                                               \
+    uint32 s3 = rgen->s3;
+    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+        float impulseResult = testWrapPhase(inc, phase);
+        // Drop the impulse if necessary
+        if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
+            impulseResult = 0.f;
+        }
+        inc = freqIn * freqMul;
+        outBuf[xxn] = impulseResult;
+        phase += inc;
+    }
+
+    mPhase = phase;
+    mPhaseIncrement = inc;
+}
+
+void FlexPlugins::ImpulseDropout::next_ak(int inNumSamples) {
+    float* outBuf = out(0);
+    float freqIn = in0(0);
+    double off = in0(1);
+    float dropProbIn = in0(2);
+    
+    // Collect UGen state
+    double phase = mPhase;
+    double inc = mPhaseIncrement;
+    float freqMul = mFreqMul;
+    double prevOff = mPhaseOffset;
+
+    double offSlope = calcSlope(off, prevOff);
+    bool offChanged = offSlope != 0.f;
+
+    RGen* rgen = mParent->mRGen;
+    uint32 s1 = rgen->s1;                                                                                               \
+    uint32 s2 = rgen->s2;                                                                                               \
+    uint32 s3 = rgen->s3;
+    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+        float impulseResult = testWrapPhase(inc, phase);
+        // Drop the impulse if necessary
+        if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
+            impulseResult = 0.f;
+        }
+        if (offChanged) {
+            phase += offSlope;
+            testWrapPhase(inc, phase);
+        }
+        inc = freqIn * freqMul;
+        outBuf[xxn] = impulseResult;
+        phase += inc;
+    }
+
+    mPhase = phase;
+    mPhaseOffset = off;
+    mPhaseIncrement = inc;
+}
+
+void FlexPlugins::ImpulseDropout::next_ki(int inNumSamples) {
+    float* outBuf = out(0);
+    double inc = in0(0) * mFreqMul;
+    float dropProbIn = in0(2);
+
+    // Collect UGen state
+    double phase = mPhase;
+    double prevInc = mPhaseIncrement;
+    
+    double incSlope = calcSlope(inc, prevInc);
+    
+    RGen* rgen = mParent->mRGen;
+    uint32 s1 = rgen->s1;                                                                                               \
+    uint32 s2 = rgen->s2;                                                                                               \
+    uint32 s3 = rgen->s3;
+    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+        float impulseResult = testWrapPhase(prevInc, phase);
+        // Drop the impulse if necessary
+        if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
+            impulseResult = 0.f;
+        }
+        outBuf[xxn] = impulseResult;
+        prevInc += incSlope;
+        phase += prevInc;
+    }
+
+    mPhase = phase;
+    mPhaseIncrement = inc;
+}
+
+void FlexPlugins::ImpulseDropout::next_kk(int inNumSamples) {
+    float* outBuf = out(0);
+    double inc = in0(0) * mFreqMul;
+    double off = in0(1);
+    float dropProbIn = in0(2);
+
+    // Collect UGen state
+    double phase = mPhase;
+    double prevInc = mPhaseIncrement;
+    double prevOff = mPhaseOffset;
+    
+    double incSlope = calcSlope(inc, prevInc);
+    double phaseSlope = calcSlope(off, prevOff);
+    bool phOffChanged = phaseSlope != 0.f;
+
+    RGen* rgen = mParent->mRGen;
+    uint32 s1 = rgen->s1;                                                                                               \
+    uint32 s2 = rgen->s2;                                                                                               \
+    uint32 s3 = rgen->s3;
+    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+        float impulseResult = testWrapPhase(prevInc, phase);
+        // Drop the impulse if necessary
+        if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
+            impulseResult = 0.f;
+        }
+        if (phOffChanged) {
+            phase += phaseSlope;
+            testWrapPhase(prevInc, phase);
+        }
+        outBuf[xxn] = impulseResult;
+        prevInc += incSlope;
+        phase += prevInc;
+    }
+
+    mPhase = phase;
+    mPhaseOffset = off;
+    mPhaseIncrement = inc;
 }

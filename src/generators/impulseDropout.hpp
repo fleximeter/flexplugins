@@ -23,18 +23,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #pragma once
-#include "SC_PlugIn.h"
-#define HEAP_MAX_SIZE 1024
+#include "SC_PlugIn.hpp"
 
-// Represents an ImpulseDropout UGen.
-struct ImpulseDropout : public Unit {
-    double mPhase, mPhaseOffset, mPhaseIncrement;
-    float mFreqMul;
-};
-
-void ImpulseDropout_Ctor(ImpulseDropout* unit);
-void ImpulseDropout_next_aa(ImpulseDropout* unit, int inNumSamples);
-void ImpulseDropout_next_ai(ImpulseDropout* unit, int inNumSamples);
-void ImpulseDropout_next_ak(ImpulseDropout* unit, int inNumSamples);
-void ImpulseDropout_next_ki(ImpulseDropout* unit, int inNumSamples);
-void ImpulseDropout_next_kk(ImpulseDropout* unit, int inNumSamples);
+namespace FlexPlugins {
+    // Represents an ImpulseDropout UGen.
+    class ImpulseDropout : public SCUnit {
+    public:
+        ImpulseDropout();
+    private:
+        void next_aa(int inNumSamples);
+        void next_ai(int inNumSamples);
+        void next_ak(int inNumSamples);
+        void next_ki(int inNumSamples);
+        void next_kk(int inNumSamples);
+        double mPhase, mPhaseOffset, mPhaseIncrement;
+        float mFreqMul;
+    };
+}

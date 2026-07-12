@@ -31,7 +31,7 @@ InterfaceTable *ft;
 
 PluginLoad(flexplugin_generators) {
     ft = inTable;
-    DefineSimpleUnit(ImpulseDropout);
+    registerUnit<FlexPlugins::ImpulseDropout>(ft, "ImpulseDropout", false);
     DefineDtorUnit(ImpulseJitter);
     DefineSimpleUnit(LoopPhasor);
 }

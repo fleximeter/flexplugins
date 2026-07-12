@@ -26,13 +26,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "SC_PlugIn.hpp"
 
-class FIR : public SCUnit {
-public:
-    FIR();
-    ~FIR();
-
-private:
-    void next(int inNumSamples);
-    float *m_z;
-    size_t m_delaySize;
-};
+namespace FlexPlugins {
+    class FIR : public SCUnit {
+    public:
+        FIR();
+        ~FIR();
+    
+    private:
+        void next(int inNumSamples);
+        float *m_z;
+        size_t m_delaySize;
+    };
+}

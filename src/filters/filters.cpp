@@ -29,5 +29,5 @@ InterfaceTable *ft;
 
 PluginLoad(flex_filters) {
     ft = inTable;
-    registerUnit<FIR>(ft, "FIR", false);
+    registerUnit<FlexPlugins::FIR>(ft, "FIR", false);
 }
