@@ -23,210 +23,175 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "loopPhasor.hpp"
+#include "SC_Rate.h"
+#include <iostream>
 extern InterfaceTable *ft;
 
 // Construct the LoopPhasor
-void LoopPhasor_Ctor(LoopPhasor* unit) {
+FlexPlugins::LoopPhasor::LoopPhasor() {
     // Set the calculation function 
-    if (unit->mCalcRate == calc_FullRate) {
-        if (INRATE(0) == calc_FullRate) {
-            if (INRATE(1) == calc_FullRate) {
-                SETCALC(LoopPhasor_next_aa);
-            } else {
-                SETCALC(LoopPhasor_next_ak);
-            }
+    if (inRate(2) == calc_FullRate) {
+        if (inRate(0) == calc_FullRate) {
+            set_calc_function<LoopPhasor, &LoopPhasor::next_aa>();
+            Print("Set aa\n");
+            next_aa(1);
         } else {
-            SETCALC(LoopPhasor_next_kk);
+            Print("Set ak\n");
+            set_calc_function<LoopPhasor, &LoopPhasor::next_ak>();
+            next_ak(1);
         }
     } else {
-        SETCALC(LoopPhasor_next_ak);
+        Print("Set kk\n");
+        set_calc_function<LoopPhasor, &LoopPhasor::next_k>();
+        next_k(1);
     }
 
     // Initialize the triggers
-    unit->m_prevTriggerStart = IN0(0);
-    unit->m_prevTriggerFinish = IN0(1);
-    unit->m_triggerFinishState = false;
+    m_prevTriggerStart = in0(0);
+    m_prevTriggerFinish = in0(1);
+    m_loopState = false;
 
     // Initialize the output
-    unit->m_level = IN0(3);
-    ZOUT0(0) = static_cast<float>(unit->m_level);
+    m_level = in0(3);
 }
 
-// Calculates samples for a LoopPhasor.kr UGen
-void LoopPhasor_next_kk(LoopPhasor* unit, int inNumSamples) {
+// all parameters are control rate
+void FlexPlugins::LoopPhasor::next_k(int inNumSamples) {
     // Pointer to output array
-    float* out = OUT(0);
+    float* outBuf = out(0);
 
     // Get new parameters of the LoopPhasor
-    float triggerReturnToStart = IN0(0);
-    float triggerFinish = IN0(1);
-    double rate = IN0(2);
-    double startPosition = IN0(3);
-    double endPosition = IN0(4);
-    double loopStart = IN0(5);
-    double loopEnd = IN0(6);
-
-    // Get current state of the LoopPhasor
-    float previousTriggerReturnToStart = unit->m_prevTriggerStart;  // trigger return to start
-    float previousTriggerFinish = unit->m_prevTriggerFinish;  // trigger finish
-    double level = unit->m_level;
+    const float triggerReturnToStart = in0(0);
+    const float triggerFinish = in0(1);
+    const float rate = in0(2);
+    const float startPosition = in0(3);
+    const float endPosition = in0(4);
+    const float loopStart = in0(5);
+    const float loopEnd = in0(6);
 
     // Handle trigger return to start
-    if (previousTriggerReturnToStart <= 0.f && triggerReturnToStart > 0.f) {
-        level = startPosition;
+    if (m_prevTriggerStart <= 0.f && triggerReturnToStart > 0.f) {
+        m_level = startPosition;
     }
 
-    // Handle trigger finish. This just flips the finish trigger.
-    if (previousTriggerFinish <= 0.f && triggerFinish > 0.f) {
-        unit->m_triggerFinishState = !(unit->m_triggerFinishState);
+    // Handle trigger finish. This just flips the loop state.
+    if (m_prevTriggerFinish <= 0.f && triggerFinish > 0.f) {
+        m_triggerFinishState = !m_triggerFinishState;
     }
 
     // Compute output block
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        // If we haven't triggered completion
-        if (!unit->m_triggerFinishState) {
-            // If we're inside the looping part of the LoopPhasor
-            if (level >= loopStart && level <= loopEnd) {
-                level = sc_wrap(level, loopStart, loopEnd);
-            } else {
-                level = sc_wrap(level, startPosition, endPosition);
+    for (int i = 0; i < inNumSamples; i++) {
+        if (!m_triggerFinishState) {
+            if (m_level >= loopStart) {
+                m_loopState = true;
+            }
+            if (m_loopState) {
+                m_level = sc_wrap(m_level, loopStart, loopEnd);
             }
         }
 
-        // Otherwise we wrap up
         else {
-            level = sc_max(level, startPosition);
-            level = sc_min(level, endPosition);
+            m_loopState = false;
+            m_level = sc_clip(m_level, startPosition, endPosition);
         }
         
-        out[xxn] = static_cast<float>(level);
-        level += rate;
+        outBuf[i] = static_cast<float>(m_level);
+        m_level += rate;
     }
 
     // Update the state of the LoopPhasor
-    unit->m_prevTriggerStart = triggerReturnToStart;
-    unit->m_prevTriggerFinish = triggerFinish;
-    unit->m_level = level;
+    m_prevTriggerStart = triggerReturnToStart;
+    m_prevTriggerFinish = triggerFinish;
 }
 
-// Calculates samples for a LoopPhasor.ar ugen with .kr parameters
-void LoopPhasor_next_ak(LoopPhasor* unit, int inNumSamples) {
+// rate parameter is audio rate
+void FlexPlugins::LoopPhasor::next_ak(int inNumSamples) {
     // Pointer to output array
-    float* out = OUT(0);
+    float* outBuf = out(0);
 
     // Get new parameters of the LoopPhasor
-    float *triggerReturnToStart = IN(0);
-    float *triggerFinish = IN(1);
-    double rate = IN0(2);
-    double startPosition = IN0(3);
-    double endPosition = IN0(4);
-    double loopStart = IN0(5);
-    double loopEnd = IN0(6);
+    const float triggerReturnToStart = in0(0);
+    const float triggerFinish = in0(1);
+    const float *rate = in(2);
+    const float startPosition = in0(3);
+    const float endPosition = in0(4);
+    const float loopStart = in0(5);
+    const float loopEnd = in0(6);
 
-    // Get current state of the LoopPhasor
-    float previousTriggerReturnToStart = unit->m_prevTriggerStart;
-    float previousTriggerFinish = unit->m_prevTriggerFinish;
-    double level = unit->m_level;
-
-    // Compute output block
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        // If we reset to start
-        if (previousTriggerReturnToStart <= 0.f && triggerReturnToStart[xxn] > 0.f) {
-            float frac = 1.f - previousTriggerReturnToStart / (triggerReturnToStart[xxn] - previousTriggerReturnToStart);
-            level = startPosition + frac * rate;
-        }
-
-        // Handle trigger finish. This just flips the finish trigger.
-        if (previousTriggerFinish <= 0.f && triggerFinish[xxn] > 0.f) {
-            unit->m_triggerFinishState = !(unit->m_triggerFinishState);
-        }
-
-        // Wrapping: if we haven't triggered completion
-        if (!unit->m_triggerFinishState) {
-            // if we're inside the looping part of the LoopPhasor
-            if (level >= loopStart && level <= loopEnd) {
-                level = sc_wrap(level, loopStart, loopEnd);
-            } else {
-                level = sc_wrap(level, startPosition, endPosition);
-            }
-        }
-
-        // Wrapping: if we have triggered completion
-        else {
-            level = sc_max(level, startPosition);
-            level = sc_min(level, endPosition);
-        }
-
-        out[xxn] = static_cast<float>(level);
-        level += rate;
-        previousTriggerReturnToStart = triggerReturnToStart[xxn];
-        previousTriggerFinish = triggerFinish[xxn];
+    // Handle trigger return to start
+    if (m_prevTriggerStart <= 0.f && triggerReturnToStart > 0.f) {
+        m_level = startPosition;
     }
 
-    // update the state of the LoopPhasor
-    unit->m_prevTriggerStart = previousTriggerReturnToStart;
-    unit->m_prevTriggerFinish = previousTriggerFinish;
-    unit->m_level = level;
-}
-
-// Calculates samples for a LoopPhasor.ar UGen with .ar parameters
-void LoopPhasor_next_aa(LoopPhasor* unit, int inNumSamples) {
-    float* out = OUT(0);
-
-    // Get new parameters of the LoopPhasor
-    float *triggerReturnToStart = IN(0);
-    float *triggerFinish = IN(1);
-    float *rate = IN(2);
-    double startPosition = IN0(3);
-    double endPosition = IN0(4);
-    double loopStart = IN0(5);
-    double loopEnd = IN0(6);
-
-    // Get current state of the LoopPhasor
-    float previousTriggerReturnToStart = unit->m_prevTriggerStart;
-    float previousTriggerFinish = unit->m_prevTriggerFinish;
-    double level = unit->m_level;
-
-    float *in = triggerReturnToStart;
-    float previn = previousTriggerReturnToStart;
+    // Handle trigger finish. This just flips the finish trigger.
+    if (m_prevTriggerFinish <= 0.f && triggerFinish > 0.f) {
+        m_triggerFinishState = !(m_triggerFinishState);
+    }
 
     // Compute output block
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
-        // Handle trigger return to start
-        if (previousTriggerReturnToStart <= 0.f && triggerReturnToStart[xxn] > 0.f) {
-            float frac = 1.f - previousTriggerReturnToStart / (triggerReturnToStart[xxn] - previousTriggerReturnToStart);
-            level = startPosition + frac * rate[xxn];
-        }
-
-        // Handle trigger finish. This just flips the finish trigger.
-        if (previousTriggerFinish <= 0.f && triggerFinish[xxn] > 0.f) {
-            unit->m_triggerFinishState = !(unit->m_triggerFinishState);
-        }
-
-        // Wrapping: if we haven't triggered completion
-        if (!unit->m_triggerFinishState) {
-            // If we're inside the looping part of the LoopPhasor
-            if (level >= loopStart && level <= loopEnd) {
-                level = sc_wrap(level, loopStart, loopEnd);
-            } else {
-                level = sc_wrap(level, startPosition, endPosition);
+    for (int i = 0; i < inNumSamples; i++) {
+        if (!m_triggerFinishState) {
+            if (m_level >= loopStart) {
+                m_loopState = true;
+            }
+            if (m_loopState) {
+                m_level = sc_wrap(m_level, loopStart, loopEnd);
             }
         }
 
-        // Wrapping: if we have triggered completion
         else {
-            level = sc_max(level, startPosition);
-            level = sc_min(level, endPosition);
+            m_level = sc_clip(m_level, startPosition, endPosition);
+        }
+
+        outBuf[i] = static_cast<float>(m_level);
+        m_level += rate[i];
+    }
+    m_prevTriggerStart = triggerReturnToStart;
+    m_prevTriggerFinish = triggerFinish;
+}
+
+// first two parameters are audio rate
+void FlexPlugins::LoopPhasor::next_aa(int inNumSamples) {
+    float* outBuf = out(0);
+
+    // Get new parameters of the LoopPhasor
+    const float *triggerReturnToStart = in(0);
+    const float triggerFinish = in0(1);
+    const float *rate = in(2);
+    const float startPosition = in0(3);
+    const float endPosition = in0(4);
+    const float loopStart = in0(5);
+    const float loopEnd = in0(6);
+
+    // Handle trigger finish. This just flips the finish trigger.
+    if (m_prevTriggerFinish <= 0.f && triggerFinish > 0.f) {
+        m_triggerFinishState = !(m_triggerFinishState);
+    }
+
+    // Compute output block
+    for (int i = 0; i < inNumSamples; i++) {
+        // Handle trigger return to start
+        if (m_prevTriggerStart <= 0.f && triggerReturnToStart[i] > 0.f) {
+            float frac = 1.f - m_prevTriggerStart / (triggerReturnToStart[i] - m_prevTriggerStart);
+            m_level = startPosition + frac * rate[i];
+        }
+
+        if (!m_triggerFinishState) {
+            if (m_level >= loopStart) {
+                m_loopState = true;
+            }
+            if (m_loopState) {
+                m_level = sc_wrap(m_level, loopStart, loopEnd);
+            }
+        }
+
+        else {
+            m_level = sc_clip(m_level, startPosition, endPosition);
         }
         
-        out[xxn] = static_cast<float>(level);
-        level += rate[xxn];
-        previousTriggerReturnToStart = triggerReturnToStart[xxn];
-        previousTriggerFinish = triggerFinish[xxn];
+        outBuf[i] = static_cast<float>(m_level);
+        m_level += rate[i];
+        m_prevTriggerStart = triggerReturnToStart[i];
     }
-    
-    // update the state of the LoopPhasor at the end of the calculation block
-    unit->m_prevTriggerStart = previousTriggerReturnToStart;
-    unit->m_prevTriggerFinish = previousTriggerFinish;
-    unit->m_level = level;
+    m_prevTriggerFinish = triggerFinish;
 }

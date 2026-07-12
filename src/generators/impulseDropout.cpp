@@ -119,18 +119,18 @@ void FlexPlugins::ImpulseDropout::next_aa(int inNumSamples) {
     uint32 s2 = rgen->s2;                                                                                               \
     uint32 s3 = rgen->s3;
 
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+    for (int i = 0; i < inNumSamples; i++) {
         float impulseResult = testWrapPhase(inc, phase);
         // Drop the impulse if necessary
         if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
             impulseResult = 0.f;
         }
-        double off = static_cast<double>(offIn[xxn]);
+        double off = static_cast<double>(offIn[i]);
         double offInc = off - prevOff;
         phase += offInc;
         testWrapPhase(inc, phase);
-        inc = freqIn[xxn] * freqMul;
-        outBuf[xxn] = impulseResult;
+        inc = freqIn[i] * freqMul;
+        outBuf[i] = impulseResult;
         phase += inc;
         prevOff = off;
     }
@@ -154,14 +154,14 @@ void FlexPlugins::ImpulseDropout::next_ai(int inNumSamples) {
     uint32 s1 = rgen->s1;                                                                                               \
     uint32 s2 = rgen->s2;                                                                                               \
     uint32 s3 = rgen->s3;
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+    for (int i = 0; i < inNumSamples; i++) {
         float impulseResult = testWrapPhase(inc, phase);
         // Drop the impulse if necessary
         if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
             impulseResult = 0.f;
         }
         inc = freqIn * freqMul;
-        outBuf[xxn] = impulseResult;
+        outBuf[i] = impulseResult;
         phase += inc;
     }
 
@@ -188,7 +188,7 @@ void FlexPlugins::ImpulseDropout::next_ak(int inNumSamples) {
     uint32 s1 = rgen->s1;                                                                                               \
     uint32 s2 = rgen->s2;                                                                                               \
     uint32 s3 = rgen->s3;
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+    for (int i = 0; i < inNumSamples; i++) {
         float impulseResult = testWrapPhase(inc, phase);
         // Drop the impulse if necessary
         if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
@@ -199,7 +199,7 @@ void FlexPlugins::ImpulseDropout::next_ak(int inNumSamples) {
             testWrapPhase(inc, phase);
         }
         inc = freqIn * freqMul;
-        outBuf[xxn] = impulseResult;
+        outBuf[i] = impulseResult;
         phase += inc;
     }
 
@@ -223,13 +223,13 @@ void FlexPlugins::ImpulseDropout::next_ki(int inNumSamples) {
     uint32 s1 = rgen->s1;                                                                                               \
     uint32 s2 = rgen->s2;                                                                                               \
     uint32 s3 = rgen->s3;
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+    for (int i = 0; i < inNumSamples; i++) {
         float impulseResult = testWrapPhase(prevInc, phase);
         // Drop the impulse if necessary
         if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
             impulseResult = 0.f;
         }
-        outBuf[xxn] = impulseResult;
+        outBuf[i] = impulseResult;
         prevInc += incSlope;
         phase += prevInc;
     }
@@ -257,7 +257,7 @@ void FlexPlugins::ImpulseDropout::next_kk(int inNumSamples) {
     uint32 s1 = rgen->s1;                                                                                               \
     uint32 s2 = rgen->s2;                                                                                               \
     uint32 s3 = rgen->s3;
-    for (int xxn = 0; xxn < inNumSamples; xxn++) {
+    for (int i = 0; i < inNumSamples; i++) {
         float impulseResult = testWrapPhase(prevInc, phase);
         // Drop the impulse if necessary
         if (impulseResult > 0.5f && rgen->frand() < dropProbIn) {
@@ -267,7 +267,7 @@ void FlexPlugins::ImpulseDropout::next_kk(int inNumSamples) {
             phase += phaseSlope;
             testWrapPhase(prevInc, phase);
         }
-        outBuf[xxn] = impulseResult;
+        outBuf[i] = impulseResult;
         prevInc += incSlope;
         phase += prevInc;
     }

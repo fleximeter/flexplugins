@@ -22,7 +22,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_PlugIn.h"
+#include "SC_PlugIn.hpp"
 #include "loopPhasor.hpp"
 #include "impulseDropout.hpp"
 #include "impulseJitter.hpp"
@@ -32,6 +32,6 @@ InterfaceTable *ft;
 PluginLoad(flexplugin_generators) {
     ft = inTable;
     registerUnit<FlexPlugins::ImpulseDropout>(ft, "ImpulseDropout", false);
-    DefineDtorUnit(ImpulseJitter);
-    DefineSimpleUnit(LoopPhasor);
+    registerUnit<FlexPlugins::ImpulseJitter>(ft, "ImpulseJitter", false);
+    registerUnit<FlexPlugins::LoopPhasor>(ft, "LoopPhasor", false);
 }
