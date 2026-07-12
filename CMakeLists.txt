@@ -98,6 +98,7 @@ if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mstackrealign")
 endif()
 
+add_subdirectory(src/filters)
 add_subdirectory(src/generators)
 add_subdirectory(src/pv)
 add_subdirectory(src/rubberband)
@@ -113,10 +114,11 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     endif()
 endif()
 
-install(TARGETS generators pv rubberband
+install(TARGETS filters generators pv rubberband
     LIBRARY DESTINATION Plugins
 )
 install(FILES 
+    src/filters/filters.sc
     src/generators/generators.sc
     src/pv/pv.sc
     src/rubberband/rubberband.sc
@@ -124,6 +126,7 @@ install(FILES
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )
 install(FILES
+    src/filters/FIR.schelp
     src/generators/ImpulseDropout.schelp
     src/generators/ImpulseJitter.schelp
     src/generators/LoopPhasor.schelp
@@ -139,7 +142,7 @@ install(FILES
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )
 if(SUPERNOVA)
-    install(TARGETS generators_supernova pv_supernova rubberband_supernova
+    install(TARGETS filters_supernova generators_supernova pv_supernova rubberband_supernova
         LIBRARY DESTINATION Plugins
     )
 endif()
