@@ -24,13 +24,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "SC_PlugIn.h"
+#include "SC_PlugIn.hpp"
 
-struct FIR : public Unit {
+class FIR : public SCUnit {
+public:
+    FIR();
+    ~FIR();
+
+private:
+    void next(int inNumSamples);
     float *m_z;
     size_t m_delaySize;
 };
-
-void FIR_Ctor(FIR *unit);
-void FIR_Dtor(FIR *unit);
-void FIR_next(FIR *unit, int inNumSamples);

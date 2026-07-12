@@ -29,5 +29,5 @@ InterfaceTable *ft;
 
 PluginLoad(flex_filters) {
     ft = inTable;
-    DefineDtorUnit(FIR);
+    registerUnit<FIR>(ft, "FIR", false);
 }

@@ -28,12 +28,29 @@ This scalar will be added to the signal
 
 Examples::
 
+A 5-tap lowpass filter
 code::
-(
 {
     var sig = Saw.ar(440);
     sig = FIR.ar(`[0.2, 0.2, 0.2, 0.2, 0.2], sig);
 }.play;
-)
+::
+
+A 19-tap control signal smoother
+code::
+{
+	var sig;
+	sig = LFPulse.kr(10);
+	[sig, FIR.kr(`((1/19)!19), sig)];
+}.plot(0.3);
+::
+
+Changing coefficients
+code::
+{
+	var sig;
+	sig = LFPulse.kr(10);
+	[sig, FIR.kr(`[SinOsc.kr(10), SinOsc.kr(15)], sig)];
+}.plot(0.3);
 ::
 

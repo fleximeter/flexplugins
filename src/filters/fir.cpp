@@ -23,37 +23,36 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "fir.hpp"
-#include "SC_Unit.h"
 extern InterfaceTable *ft;
 
-void FIR_Ctor(FIR *unit) {
-    unit->m_z = static_cast<float*>(RTAlloc(unit->mWorld, FULLBUFLENGTH * sizeof(float)));
-    for (size_t i = 0; i < FULLBUFLENGTH; i++) {
-        unit->m_z[i] = 0.f;
+FIR::FIR() {
+    m_z = static_cast<float*>(RTAlloc(mWorld, fullBufferSize() * sizeof(float)));
+    for (size_t i = 0; i < fullBufferSize(); i++) {
+        m_z[i] = 0.f;
     }
-    SETCALC(FIR_next);
-    OUT0(0) = 0;
+    set_calc_function<FIR, &FIR::next>();
+    next(1);
 }
 
-void FIR_Dtor(FIR *unit) {
-    if (unit->m_z) RTFree(unit->mWorld, unit->m_z);
+FIR::~FIR() {
+    if (m_z) RTFree(mWorld, m_z);
 }
 
-void FIR_next(FIR *unit, int inNumSamples) {
-    size_t numCoefs = static_cast<size_t>(unit->mNumInputs - 1);
-    numCoefs = sc_clip(numCoefs, 0, static_cast<size_t>(FULLBUFLENGTH));
-    const float *inBuf = IN(0);
-    float *outBuf = OUT(0);
+void FIR::next(int inNumSamples) {
+    size_t numCoefs = static_cast<size_t>(mNumInputs - 1);
+    numCoefs = sc_clip(numCoefs, 0, static_cast<size_t>(fullBufferSize()));
+    const float *inBuf = in(0);
+    float *outBuf = out(0);
     for (size_t xxi = 0; xxi < inNumSamples; xxi++) {
         float convResult = 0.f;
         // unit delay
-        for (size_t xxj = FULLBUFLENGTH - 1; xxj > 0; xxj--) {
-            unit->m_z[xxj] = unit->m_z[xxj-1];
+        for (size_t xxj = fullBufferSize() - 1; xxj > 0; xxj--) {
+            m_z[xxj] = m_z[xxj-1];
         }
-        unit->m_z[0] = inBuf[xxi];
+        m_z[0] = inBuf[xxi];
         // convolve
         for (size_t xxk = 0; xxk < numCoefs; xxk++) {
-            convResult += IN0(1+xxk) * unit->m_z[xxk];
+            convResult += in0(1+xxk) * m_z[xxk];
         }
         outBuf[xxi] = convResult;
     }
