@@ -23,37 +23,38 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "fir.hpp"
+#include "SC_Unit.h"
 extern InterfaceTable *ft;
 
-FlexPlugins::FIR::FIR() {
-    m_z = static_cast<float*>(RTAlloc(mWorld, fullBufferSize() * sizeof(float)));
-    for (size_t i = 0; i < fullBufferSize(); i++) {
-        m_z[i] = 0.f;
+void FIR_Ctor(FIR *unit) {
+    unit->m_z = static_cast<float*>(RTAlloc(unit->mWorld, FULLBUFLENGTH * sizeof(float)));
+    for (size_t i = 0; i < FULLBUFLENGTH; i++) {
+        unit->m_z[i] = 0.f;
     }
-    set_calc_function<FlexPlugins::FIR, &FlexPlugins::FIR::next>();
-    next(1);
+    SETCALC(FIR_next);
+    OUT0(0) = 0;
 }
 
-FlexPlugins::FIR::~FIR() {
-    if (m_z) RTFree(mWorld, m_z);
+void FIR_Dtor(FIR *unit) {
+    if (unit->m_z) RTFree(unit->mWorld, unit->m_z);
 }
 
-void FlexPlugins::FIR::next(int nSamples) {
-    size_t numCoefs = static_cast<size_t>(mNumInputs - 1);
-    numCoefs = sc_clip(numCoefs, 0, static_cast<size_t>(fullBufferSize()));
-    const float *inBuf = in(0);
-    float *outBuf = out(0);
-    for (size_t i = 0; i < nSamples; i++) {
+void FIR_next(FIR *unit, int inNumSamples) {
+    size_t numCoefs = static_cast<size_t>(unit->mNumInputs - 1);
+    numCoefs = sc_clip(numCoefs, 0, static_cast<size_t>(FULLBUFLENGTH));
+    const float *inBuf = IN(0);
+    float *outBuf = OUT(0);
+    for (size_t xxi = 0; xxi < inNumSamples; xxi++) {
         float convResult = 0.f;
         // unit delay
-        for (size_t j = fullBufferSize() - 1; j > 0; j--) {
-            m_z[j] = m_z[j-1];
+        for (size_t xxj = FULLBUFLENGTH - 1; xxj > 0; xxj--) {
+            unit->m_z[xxj] = unit->m_z[xxj-1];
         }
-        m_z[0] = inBuf[i];
+        unit->m_z[0] = inBuf[xxi];
         // convolve
-        for (size_t k = 0; k < numCoefs; k++) {
-            convResult += in0(1+k) * m_z[k];
+        for (size_t xxk = 0; xxk < numCoefs; xxk++) {
+            convResult += IN0(1+xxk) * unit->m_z[xxk];
         }
-        outBuf[i] = convResult;
+        outBuf[xxi] = convResult;
     }
 }

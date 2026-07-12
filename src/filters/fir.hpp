@@ -24,18 +24,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "SC_PlugIn.hpp"
+#include "SC_PlugIn.h"
 
-namespace FlexPlugins {
-    class FIR : public SCUnit {
-    public:
-        FIR();
-        ~FIR();
+struct FIR : public Unit {
+    float *m_z;
+    size_t m_delaySize;
+};
 
-    private:
-        void next(int nSamples);
-
-        float *m_z;
-        size_t m_delaySize;
-    };
-}
+void FIR_Ctor(FIR *unit);
+void FIR_Dtor(FIR *unit);
+void FIR_next(FIR *unit, int inNumSamples);

@@ -26,9 +26,20 @@ FIR : UGen {
         coefs = coefs.multichannelExpandRef(1);
         ^this.multiNewList(['audio', in, coefs]).madd(mul, add)
     }
+    *kr {
+        arg coefs, in, mul=1, add=0;
+        coefs = coefs.multichannelExpandRef(1);
+        ^this.multiNewList(['control', in, coefs]).madd(mul, add)
+    }
     *new1 {
         arg rate, in, coefs;
-        var derefCoefs = coefs.dereference;
+        var derefCoefs;
+        derefCoefs = coefs.dereference;
+        derefCoefs = derefCoefs.flop.flat;
         ^super.new.rate_(rate).addToSynth.init([in] ++ derefCoefs)
+    }
+    init {
+        arg theInputs;
+        inputs = theInputs;
     }
 }
