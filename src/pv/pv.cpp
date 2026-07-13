@@ -31,9 +31,9 @@ InterfaceTable *ft;
 
 PluginLoad(PV_flexplugins) {
     ft = inTable;
-    DefineSimpleUnit(PV_MagMirror);
-    DefineSimpleUnit(PV_MagSqueeze);
-    DefineSimpleUnit(PV_MagXFade);
+    registerUnit<FlexPlugins::PV_MagSqueeze>(ft, "PV_MagSqueeze", false);
+    registerUnit<FlexPlugins::PV_MagMirror>(ft, "PV_MagMirror", false);
+    registerUnit<FlexPlugins::PV_MagXFade>(ft, "PV_MagXFade", false);
     DefineDtorUnit(PV_PlayBufStretch);
-    DefineDtorUnit(PV_CFreeze);
+    registerUnit<FlexPlugins::PV_CFreeze>(ft, "PV_CFreeze", false);
 }

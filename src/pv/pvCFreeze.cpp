@@ -27,30 +27,31 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 extern InterfaceTable *ft;
 
-void PV_CFreeze_next(PV_CFreeze *unit, int inNumSamples) {
+void FlexPlugins::PV_CFreeze::next(int inNumSamples) {
+    PV_CFreeze *unit = this;
     PV_GET_BUF
-    float freezeState = IN0(1);
+    float freezeState = in0(1);
     // allocate the buffers
-    if (!unit->mMags) {
+    if (!mMags) {
         // MxN where N is num bins, and M is num frames. Acts as a circular buffer.
-        unit->mMags = (float*)RTAlloc(unit->mWorld, numbins * sizeof(float) * unit->mNumFrames);
+        mMags = (float*)RTAlloc(mWorld, numbins * sizeof(float) * mNumFrames);
         // M (num frames)
-        unit->mDc = (float*)RTAlloc(unit->mWorld, sizeof(float) * unit->mNumFrames);
+        mDc = (float*)RTAlloc(mWorld, sizeof(float) * mNumFrames);
         // M (num frames)
-        unit->mNyq = (float*)RTAlloc(unit->mWorld, sizeof(float) * unit->mNumFrames);
+        mNyq = (float*)RTAlloc(mWorld, sizeof(float) * mNumFrames);
         // N (num bins)
-        unit->mPhase = (float*)RTAlloc(unit->mWorld, numbins * sizeof(float));
+        mPhase = (float*)RTAlloc(mWorld, numbins * sizeof(float));
         // MxN where N is num bins, and M is num frames.
-        // Acts as a circular buffer corresponding to unit->mMags.
-        unit->mPhaseDiffs = (float*)RTAlloc(unit->mWorld, numbins * sizeof(float) * unit->mNumFrames);
-        ClearFFTUnitIfMemFailed(unit->mMags);
-        ClearFFTUnitIfMemFailed(unit->mDc);
-        ClearFFTUnitIfMemFailed(unit->mNyq);
-        ClearFFTUnitIfMemFailed(unit->mPhase);
-        ClearFFTUnitIfMemFailed(unit->mPhaseDiffs);
-        unit->mNumBins = numbins;
-        unit->mWritePtr = 0;
-    } else if (numbins != unit->mNumBins) {
+        // Acts as a circular buffer corresponding to mMags.
+        mPhaseDiffs = (float*)RTAlloc(mWorld, numbins * sizeof(float) * mNumFrames);
+        ClearFFTUnitIfMemFailed(mMags);
+        ClearFFTUnitIfMemFailed(mDc);
+        ClearFFTUnitIfMemFailed(mNyq);
+        ClearFFTUnitIfMemFailed(mPhase);
+        ClearFFTUnitIfMemFailed(mPhaseDiffs);
+        mNumBins = numbins;
+        mWritePtr = 0;
+    } else if (numbins != mNumBins) {
         // Cannot allow the FFT size to change
         return;
     }
@@ -60,64 +61,64 @@ void PV_CFreeze_next(PV_CFreeze *unit, int inNumSamples) {
     if (freezeState > 0.f) {
         RGET
         // Pull random DC and nyquist magnitudes
-        p->dc = unit->mDc[rgen.irand(unit->mNumFrames)];
-        p->nyq = unit->mNyq[rgen.irand(unit->mNumFrames)];
-        for (int xxn = 0; xxn < unit->mNumBins; xxn++) {
+        p->dc = mDc[rgen.irand(mNumFrames)];
+        p->nyq = mNyq[rgen.irand(mNumFrames)];
+        for (int xxn = 0; xxn < mNumBins; xxn++) {
             // For each bin, grab a random magnitude and phase diff pair
-            int idx = rgen.irand(unit->mNumFrames);
-            idx = idx * unit->mNumBins + xxn;
-            p->bin[xxn].mag = unit->mMags[idx];
-            unit->mPhase[xxn] = sc_wrap(unit->mPhase[xxn] + unit->mPhaseDiffs[idx], 0.f, static_cast<float>(twopi));
-            p->bin[xxn].phase = unit->mPhase[xxn];
+            int idx = rgen.irand(mNumFrames);
+            idx = idx * mNumBins + xxn;
+            p->bin[xxn].mag = mMags[idx];
+            mPhase[xxn] = sc_wrap(mPhase[xxn] + mPhaseDiffs[idx], 0.f, static_cast<float>(twopi));
+            p->bin[xxn].phase = mPhase[xxn];
         }
     } else {
         // We're writing to a circular buffer, so pull the current magnitude and phase diff arrays
-        float *currentMagArr = unit->mMags + (unit->mWritePtr * unit->mNumBins);
-        float *currentPhaseDiffArr = unit->mPhaseDiffs + (unit->mWritePtr * unit->mNumBins);
+        float *currentMagArr = mMags + (mWritePtr * mNumBins);
+        float *currentPhaseDiffArr = mPhaseDiffs + (mWritePtr * mNumBins);
         for (int xxn = 0; xxn < numbins; xxn++) {
             currentMagArr[xxn] = p->bin[xxn].mag;
-            currentPhaseDiffArr[xxn] = sc_wrap(p->bin[xxn].phase - unit->mPhase[xxn], 0.f, static_cast<float>(twopi));
-            unit->mPhase[xxn] = p->bin[xxn].phase;
+            currentPhaseDiffArr[xxn] = sc_wrap(p->bin[xxn].phase - mPhase[xxn], 0.f, static_cast<float>(twopi));
+            mPhase[xxn] = p->bin[xxn].phase;
         }
-        unit->mDc[unit->mWritePtr] = p->dc;
-        unit->mNyq[unit->mWritePtr] = p->nyq;
-        unit->mWritePtr++;
-        unit->mWritePtr %= unit->mNumFrames;
+        mDc[mWritePtr] = p->dc;
+        mNyq[mWritePtr] = p->nyq;
+        mWritePtr++;
+        mWritePtr %= mNumFrames;
     }
 }
 
-void PV_CFreeze_Ctor(PV_CFreeze *unit) {
-    SETCALC(PV_CFreeze_next);
-    OUT0(0) = IN0(0);
-    unit->mMags = nullptr;
-    unit->mDc = nullptr;
-    unit->mNyq = nullptr;
-    unit->mPhase = nullptr;
-    unit->mPhaseDiffs = nullptr;
-    int numFrames = static_cast<int>(IN0(2));
+FlexPlugins::PV_CFreeze::PV_CFreeze() {
+    mMags = nullptr;
+    mDc = nullptr;
+    mNyq = nullptr;
+    mPhase = nullptr;
+    mPhaseDiffs = nullptr;
+    int numFrames = static_cast<int>(in0(2));
     // prevent the user from doing something nuts
-    unit->mNumFrames = sc_clip(numFrames, 1, 64);
+    mNumFrames = sc_clip(numFrames, 1, 64);
+    set_calc_function<PV_CFreeze, &PV_CFreeze::next>();
+    next(1);
 }
 
-void PV_CFreeze_Dtor(PV_CFreeze *unit) {
-    if (unit->mMags) {
-        RTFree(unit->mWorld, unit->mMags);
-        unit->mMags = nullptr;
+FlexPlugins::PV_CFreeze::~PV_CFreeze() {
+    if (mMags) {
+        RTFree(mWorld, mMags);
+        mMags = nullptr;
     }
-    if (unit->mDc) {
-        RTFree(unit->mWorld, unit->mDc);
-        unit->mDc = nullptr;
+    if (mDc) {
+        RTFree(mWorld, mDc);
+        mDc = nullptr;
     }
-    if (unit->mNyq) {
-        RTFree(unit->mWorld, unit->mNyq);
-        unit->mNyq = nullptr;
+    if (mNyq) {
+        RTFree(mWorld, mNyq);
+        mNyq = nullptr;
     }
-    if (unit->mPhase) {
-        RTFree(unit->mWorld, unit->mPhase);
-        unit->mPhase = nullptr;
+    if (mPhase) {
+        RTFree(mWorld, mPhase);
+        mPhase = nullptr;
     }
-    if (unit->mPhaseDiffs) {
-        RTFree(unit->mWorld, unit->mPhaseDiffs);
-        unit->mPhaseDiffs = nullptr;
+    if (mPhaseDiffs) {
+        RTFree(mWorld, mPhaseDiffs);
+        mPhaseDiffs = nullptr;
     }
 }

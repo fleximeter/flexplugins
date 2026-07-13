@@ -27,10 +27,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 extern InterfaceTable *ft;
 
-void PV_MagSqueeze_next(PV_MagSqueeze *unit, int inNumSamples) {
+void FlexPlugins::PV_MagSqueeze::next(int inNumSamples) {
+    PV_MagSqueeze *unit = this;
     PV_GET_BUF
-    float low = IN0(1);
-    float high = IN0(2);
+    float low = in0(1);
+    float high = in0(2);
     SCPolarBuf *p = ToPolarApx(buf);
     float min = p->dc;
     float max = p->dc;
@@ -52,12 +53,13 @@ void PV_MagSqueeze_next(PV_MagSqueeze *unit, int inNumSamples) {
     }
 }
 
-void PV_MagSqueeze_Ctor(PV_MagSqueeze *unit) {
-    SETCALC(PV_MagSqueeze_next);
-    OUT0(0) = IN0(0);
+FlexPlugins::PV_MagSqueeze::PV_MagSqueeze() {
+    set_calc_function<PV_MagSqueeze, &PV_MagSqueeze::next>();
+    next(1);
 }
 
-void PV_MagMirror_next(PV_MagMirror *unit, int inNumSamples) {
+void FlexPlugins::PV_MagMirror::next(int inNumSamples) {
+    PV_MagMirror *unit = this;
     PV_GET_BUF
     SCPolarBuf *p = ToPolarApx(buf);
     float min = p->dc;
@@ -79,14 +81,15 @@ void PV_MagMirror_next(PV_MagMirror *unit, int inNumSamples) {
     }
 }
 
-void PV_MagMirror_Ctor(PV_MagMirror *unit) {
-    SETCALC(PV_MagMirror_next);
-    OUT0(0) = IN0(0);
+FlexPlugins::PV_MagMirror::PV_MagMirror() {
+    set_calc_function<PV_MagMirror, &PV_MagMirror::next>();
+    next(1);
 }
 
-void PV_MagXFade_next(PV_MagXFade *unit, int inNumSamples) {
+void FlexPlugins::PV_MagXFade::next(int inNumSamples) {
+    PV_MagXFade *unit = this;
     PV_GET_BUF2
-    float crossfade = IN0(2);
+    float crossfade = in0(2);
     crossfade = sc_clip(crossfade, 0.f, 1.f);
     SCPolarBuf *p = ToPolarApx(buf1);
     SCPolarBuf *q = ToPolarApx(buf2);
@@ -106,7 +109,7 @@ void PV_MagXFade_next(PV_MagXFade *unit, int inNumSamples) {
     }
 }
 
-void PV_MagXFade_Ctor(PV_MagXFade *unit) {
-    SETCALC(PV_MagXFade_next);
-    OUT0(0) = IN0(0);
+FlexPlugins::PV_MagXFade::PV_MagXFade() {
+    set_calc_function<PV_MagXFade, &PV_MagXFade::next>();
+    next(1);
 }
