@@ -23,26 +23,31 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #pragma once
-#include "SC_Unit.h"
+#include "SC_PlugIn.hpp"
 #include "rubberband/RubberBandStretcher.h"
 
-struct RubberBandStretcher : public Unit {
-    /// The stretcher
-    RubberBand::RubberBandStretcher* m_stretcher;
+namespace FlexPlugins {
+    class RubberBandStretcher : public SCUnit {
+    public:
+        RubberBandStretcher();
+        ~RubberBandStretcher();
 
-    /// The number of initial output samples to discard
-    size_t m_samplesToDiscard;
+    private:
+        void next(int inNumSamples);
+        
+        /// The stretcher
+        RubberBand::RubberBandStretcher* m_stretcher;
 
-    // A collection of settings for the RubberBand stretcher
-    float m_timeRatio;
-    float m_pitchRatio;
-    float m_formantRatio;
-    int m_transientsMode;
-    int m_detectorOption;
-    int m_phaseOption;
-    int m_pitchQuality;
-};
+        /// The number of initial output samples to discard
+        size_t m_samplesToDiscard;
 
-void RubberBandStretcher_Ctor(RubberBandStretcher *unit);
-void RubberBandStretcher_Dtor(RubberBandStretcher *unit);
-void RubberBandStretcher_next(RubberBandStretcher *unit, int inNumSamples);
+        // A collection of settings for the RubberBand stretcher
+        float m_timeRatio;
+        float m_pitchRatio;
+        float m_formantRatio;
+        int m_transientsMode;
+        int m_detectorOption;
+        int m_phaseOption;
+        int m_pitchQuality;
+    };
+}

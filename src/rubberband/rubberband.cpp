@@ -22,7 +22,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_PlugIn.h"
 #include "rubberBandPS.hpp"
 #include "rubberBandStretcher.hpp"
 #include "rubberBandStretcherBuf.hpp"
@@ -31,7 +30,7 @@ InterfaceTable *ft;
 
 PluginLoad(RubberBandPlugins) {
     ft = inTable;
-    DefineDtorUnit(RubberBandPS);
-    DefineDtorUnit(RubberBandStretcher);
-    DefineDtorUnit(RubberBandStretcherBuf);
+    registerUnit<FlexPlugins::RubberBandPS>(ft, "RubberBandPS", false);
+    registerUnit<FlexPlugins::RubberBandStretcher>(ft, "RubberBandStretcher", false);
+    registerUnit<FlexPlugins::RubberBandStretcherBuf>(ft, "RubberBandStretcherBuf", false);
 }

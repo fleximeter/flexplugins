@@ -24,29 +24,28 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "rubberBandStretcher.hpp"
 #include <limits>
-#include "SC_PlugIn.h"
 
 extern InterfaceTable *ft;
 
-void RubberBandStretcher_Ctor(RubberBandStretcher *unit) {
-    float timeRatio = IN0(1);
-    float pitchRatio = IN0(2);
-    float formantRatio = IN0(3);
-    int transientsMode = static_cast<int>(IN0(4));
-    int detector = static_cast<int>(IN0(5));
-    int phaseOption = static_cast<int>(IN0(6));
-    int pitchQuality = static_cast<int>(IN0(7));
-    int windowOption = static_cast<int>(IN0(8));
-    int smoothing = static_cast<int>(IN0(9));
-    int engine = static_cast<int>(IN0(10));
+FlexPlugins::RubberBandStretcher::RubberBandStretcher() {
+    float timeRatio = in0(1);
+    float pitchRatio = in0(2);
+    float formantRatio = in0(3);
+    int transientsMode = static_cast<int>(in0(4));
+    int detector = static_cast<int>(in0(5));
+    int phaseOption = static_cast<int>(in0(6));
+    int pitchQuality = static_cast<int>(in0(7));
+    int windowOption = static_cast<int>(in0(8));
+    int smoothing = static_cast<int>(in0(9));
+    int engine = static_cast<int>(in0(10));
     
-    unit->m_timeRatio = timeRatio;
-    unit->m_pitchRatio = pitchRatio;
-    unit->m_formantRatio = formantRatio;
-    unit->m_transientsMode = transientsMode;
-    unit->m_detectorOption = detector;
-    unit->m_phaseOption = phaseOption;
-    unit->m_pitchQuality = pitchQuality;
+    m_timeRatio = timeRatio;
+    m_pitchRatio = pitchRatio;
+    m_formantRatio = formantRatio;
+    m_transientsMode = transientsMode;
+    m_detectorOption = detector;
+    m_phaseOption = phaseOption;
+    m_pitchQuality = pitchQuality;
 
     // Set up RubberBandStretcher initial options
     int options = 0x01000001;  // formant-preserving, real-time options set
@@ -98,130 +97,128 @@ void RubberBandStretcher_Ctor(RubberBandStretcher *unit) {
     }
 
     // Allocate the shifter with the given options
-    unit->m_stretcher = (RubberBand::RubberBandStretcher*)RTAlloc(unit->mWorld, sizeof(RubberBand::RubberBandStretcher));
-    new (unit->m_stretcher) RubberBand::RubberBandStretcher(static_cast<size_t>(SAMPLERATE), 1, options, timeRatio, pitchRatio);
+    m_stretcher = (RubberBand::RubberBandStretcher*)RTAlloc(mWorld, sizeof(RubberBand::RubberBandStretcher));
+    new (m_stretcher) RubberBand::RubberBandStretcher(static_cast<size_t>(sampleRate()), 1, options, timeRatio, pitchRatio);
 
     // Initialize the shifter
     // The shifter accepts a block size (which must be set before the first process()
     // call and not after), which avoids the need to use local RingBuffers.
-    unit->m_stretcher->setMaxProcessSize(BUFLENGTH);
-    unit->m_stretcher->setTimeRatio(sc_clip(timeRatio, 1.f, std::numeric_limits<float>::infinity()));
-    unit->m_stretcher->setPitchScale(sc_clip(pitchRatio, 1e-2, 64));
-    unit->m_stretcher->setFormantScale(sc_clip(formantRatio, 1e-2, 64));
+    m_stretcher->setMaxProcessSize(fullBufferSize());
+    m_stretcher->setTimeRatio(sc_clip(timeRatio, 1.f, std::numeric_limits<float>::infinity()));
+    m_stretcher->setPitchScale(sc_clip(pitchRatio, 1e-2, 64));
+    m_stretcher->setFormantScale(sc_clip(formantRatio, 1e-2, 64));
 
     // Feed samples in until the shifter is ready to start producing valid output.
     // This is necessary because the shifter isn't ready to produce valid output
     // as soon as it is initialized--it requires padded 0s to be fed in for some
     // number of samples specified by the shifter.
-    float *zeroBuf = (float*)RTAlloc(unit->mWorld, BUFLENGTH * sizeof(float));
-    for (size_t i = 0; i < BUFLENGTH; i++) {
+    float *zeroBuf = (float*)RTAlloc(mWorld, fullBufferSize() * sizeof(float));
+    for (size_t i = 0; i < fullBufferSize(); i++) {
         zeroBuf[i] = 0.f;
     }
 
     // The number of initial zeros required
-    size_t startPad = unit->m_stretcher->getPreferredStartPad();
+    size_t startPad = m_stretcher->getPreferredStartPad();
     
     // The number of samples to discard at the beginning of the stretcher output.
     // This is handled in the RubberBandStretcher_next() method.
-    unit->m_samplesToDiscard = unit->m_stretcher->getStartDelay();
+    m_samplesToDiscard = m_stretcher->getStartDelay();
 
     // Feed in the start pad samples
     while (startPad > 0) {
-        unit->m_stretcher->process(&zeroBuf, BUFLENGTH, false);
-        startPad -= BUFLENGTH;
+        m_stretcher->process(&zeroBuf, fullBufferSize(), false);
+        startPad -= fullBufferSize();
     }
-    RTFree(unit->mWorld, zeroBuf);
+    RTFree(mWorld, zeroBuf);
 
-    // Initialize first out sample
-    OUT0(0) = 0;
-
-    SETCALC(RubberBandStretcher_next);
+    set_calc_function<RubberBandStretcher, &RubberBandStretcher::next>();
+    next(1);
 }
 
-void RubberBandStretcher_Dtor(RubberBandStretcher *unit) {
-    RTFree(unit->mWorld, unit->m_stretcher);
+FlexPlugins::RubberBandStretcher::~RubberBandStretcher() {
+    if (m_stretcher) RTFree(mWorld, m_stretcher);
 }
 
-void RubberBandStretcher_next(RubberBandStretcher *unit, int inNumSamples) {
-    float *in = IN(0);
-    float *out = OUT(0);
-    float timeRatio = IN0(1);
-    float pitchRatio = IN0(2);
-    float formantRatio = IN0(3);
-    int transientsMode = static_cast<int>(IN0(4));
-    int detector = static_cast<int>(IN0(5));
-    int phaseOption = static_cast<int>(IN0(6));
-    int pitchQuality = static_cast<int>(IN0(7));
+void FlexPlugins::RubberBandStretcher::next(int inNumSamples) {
+    const float *inBuf = in(0);
+    float *outBuf = out(0);
+    float timeRatio = in0(1);
+    float pitchRatio = in0(2);
+    float formantRatio = in0(3);
+    int transientsMode = static_cast<int>(in0(4));
+    int detector = static_cast<int>(in0(5));
+    int phaseOption = static_cast<int>(in0(6));
+    int pitchQuality = static_cast<int>(in0(7));
 
     // Update shifter options only if something has changed
-    if (timeRatio != unit->m_timeRatio) {
-        unit->m_stretcher->setTimeRatio(sc_clip(timeRatio, 1.f, std::numeric_limits<float>::infinity()));
+    if (timeRatio != m_timeRatio) {
+        m_stretcher->setTimeRatio(sc_clip(timeRatio, 1.f, std::numeric_limits<float>::infinity()));
     }
-    if (pitchRatio != unit->m_pitchRatio) {
-        unit->m_stretcher->setPitchScale(sc_clip(pitchRatio, 1e-2, 64));
+    if (pitchRatio != m_pitchRatio) {
+        m_stretcher->setPitchScale(sc_clip(pitchRatio, 1e-2, 64));
     }
-    if (formantRatio != unit->m_formantRatio) {
-        unit->m_stretcher->setFormantScale(sc_clip(formantRatio, 1e-2, 64));
+    if (formantRatio != m_formantRatio) {
+        m_stretcher->setFormantScale(sc_clip(formantRatio, 1e-2, 64));
     }
     // QUESTION: Will this method of setting options override all existing options,
     // or just the option provided? May need to compute all options from scratch.
-    if (transientsMode != unit->m_transientsMode) {
+    if (transientsMode != m_transientsMode) {
         switch (transientsMode) {
             case 1:
-                unit->m_stretcher->setTransientsOption(0x00000100);
+                m_stretcher->setTransientsOption(0x00000100);
                 break;
             case 2:
-                unit->m_stretcher->setTransientsOption(0x00000200);
+                m_stretcher->setTransientsOption(0x00000200);
                 break;
             default:
-                unit->m_stretcher->setTransientsOption(0x00000000);
+                m_stretcher->setTransientsOption(0x00000000);
         }
     }
-    if (detector != unit->m_detectorOption) {
+    if (detector != m_detectorOption) {
         switch (detector) {
             case 1:
-                unit->m_stretcher->setDetectorOption(0x00000400);
+                m_stretcher->setDetectorOption(0x00000400);
                 break;
             case 2:
-                unit->m_stretcher->setDetectorOption(0x00000800);
+                m_stretcher->setDetectorOption(0x00000800);
                 break;
             default:
-                unit->m_stretcher->setDetectorOption(0x00000000);
+                m_stretcher->setDetectorOption(0x00000000);
         }
     }
-    if (phaseOption != unit->m_phaseOption) {
+    if (phaseOption != m_phaseOption) {
         switch (phaseOption) {
             case 1:
-                unit->m_stretcher->setPhaseOption(0x00002000);
+                m_stretcher->setPhaseOption(0x00002000);
                 break;
             default:
-                unit->m_stretcher->setPhaseOption(0x00000000);
+                m_stretcher->setPhaseOption(0x00000000);
         }
     }
-    if (pitchQuality != unit->m_pitchQuality) {
+    if (pitchQuality != m_pitchQuality) {
         switch (pitchQuality) {
             case 1:
-                unit->m_stretcher->setPitchOption(0x02000000);
+                m_stretcher->setPitchOption(0x02000000);
                 break;
             case 2:
-                unit->m_stretcher->setPitchOption(0x04000000);
+                m_stretcher->setPitchOption(0x04000000);
                 break;
             default:
-                unit->m_stretcher->setPitchOption(0x00000000);
+                m_stretcher->setPitchOption(0x00000000);
         }
     }
 
-    unit->m_stretcher->process(&in, BUFLENGTH, false);
+    m_stretcher->process(&inBuf, inNumSamples, false);
     
     // If we can retrieve a full block worth of audio
-    if (unit->m_stretcher->available() >= BUFLENGTH) {
-        unit->m_stretcher->retrieve(&out, BUFLENGTH);
+    if (m_stretcher->available() >= inNumSamples) {
+        m_stretcher->retrieve(&outBuf, inNumSamples);
         // Clear initial samples if necessary
-        if (unit->m_samplesToDiscard > 0) {
+        if (m_samplesToDiscard > 0) {
             size_t i = 0;
-            while (i < BUFLENGTH && unit->m_samplesToDiscard > 0) {
-                out[i] = 0.f;
-                unit->m_samplesToDiscard--;
+            while (i < inNumSamples && m_samplesToDiscard > 0) {
+                outBuf[i] = 0.f;
+                m_samplesToDiscard--;
                 i++;
             }
         }
@@ -229,8 +226,6 @@ void RubberBandStretcher_next(RubberBandStretcher *unit, int inNumSamples) {
     
     // Output zeros if the shifter has no new samples available
     else {
-        for (size_t i = 0; i < BUFLENGTH; i++) {
-            out[i] = 0.f;
-        }
+        ClearUnitOutputs(this, inNumSamples);
     }
 }

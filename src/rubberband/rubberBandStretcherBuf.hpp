@@ -24,41 +24,45 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "SC_Unit.h"
+#include "SC_PlugIn.hpp"
 #include "rubberband/RubberBandStretcher.h"
 
-struct RubberBandStretcherBuf : public Unit {
-    /// The stretcher
-    RubberBand::RubberBandStretcher* m_stretcher;
+namespace FlexPlugins {
+    class RubberBandStretcherBuf : public SCUnit {
+    public:
+        RubberBandStretcherBuf();
+        ~RubberBandStretcherBuf();
 
-    /// A buffer
-    float *m_localBuf;
+    private:
+        void next(int inNumSamples);
+        /// The stretcher
+        RubberBand::RubberBandStretcher* m_stretcher;
 
-    /// The number of initial output samples to discard
-    size_t m_samplesToDiscard;
+        /// A buffer
+        float *m_localBuf;
 
-    // A collection of settings for the RubberBand stretcher
-    float m_timeRatio;
-    float m_pitchRatio;
-    float m_formantRatio;
-    int m_transientsMode;
-    int m_detectorOption;
-    int m_phaseOption;
-    int m_pitchQuality;
+        /// The number of initial output samples to discard
+        size_t m_samplesToDiscard;
 
-    /// The index of the buffer with STFT data
-    float m_fbufnum;
+        // A collection of settings for the RubberBand stretcher
+        float m_timeRatio;
+        float m_pitchRatio;
+        float m_formantRatio;
+        int m_transientsMode;
+        int m_detectorOption;
+        int m_phaseOption;
+        int m_pitchQuality;
 
-    /// The audio buffer to write the stretched audio to
-    SndBuf *m_buf;
+        /// The index of the buffer with STFT data
+        float m_fbufnum;
 
-    /// The next sample to write to
-    size_t m_writePtr;
+        /// The audio buffer to write the stretched audio to
+        SndBuf *m_buf;
 
-    /// The previous trigger
-    float m_prevTrigger;
-};
+        /// The next sample to write to
+        size_t m_writePtr;
 
-void RubberBandStretcherBuf_Ctor(RubberBandStretcherBuf *unit);
-void RubberBandStretcherBuf_Dtor(RubberBandStretcherBuf *unit);
-void RubberBandStretcherBuf_next(RubberBandStretcherBuf *unit, int inNumSamples);
+        /// The previous trigger
+        float m_prevTrigger;
+    };
+}

@@ -24,7 +24,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "loopPhasor.hpp"
 #include "SC_Rate.h"
-#include <iostream>
 extern InterfaceTable *ft;
 
 // Construct the LoopPhasor
