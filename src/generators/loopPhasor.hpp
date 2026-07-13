@@ -23,17 +23,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #pragma once
-#include "SC_PlugIn.h"
+#include "SC_PlugIn.hpp"
 
-// Represents a LoopPhasor UGen.
-struct LoopPhasor : public Unit {
-    double m_level;             // LoopPhasor output level (position of the phasor between `start` and `end`)
-    float m_prevTriggerStart;   // previous value of trigger to return to start position
-    float m_prevTriggerFinish;  // previous value of trigger to finish
-    bool m_triggerFinishState;  // current state of finish trigger (true - finish; false - continue looping)
-};
+namespace FlexPlugins {
+    // Represents a LoopPhasor UGen.
+    class LoopPhasor : public SCUnit {
+    public:
+        LoopPhasor();
 
-void LoopPhasor_Ctor(LoopPhasor* unit);
-void LoopPhasor_next_aa(LoopPhasor* unit, int inNumSamples);
-void LoopPhasor_next_ak(LoopPhasor* unit, int inNumSamples);
-void LoopPhasor_next_kk(LoopPhasor* unit, int inNumSamples);
+    private:
+        void next_ak(int inNumSamples);
+        void next_aa(int inNumSamples);
+        void next_k(int inNumSamples);
+        float m_level;              // LoopPhasor output level (position of the phasor between `start` and `end`)
+        float m_prevTriggerStart;   // previous value of trigger to return to start position
+        float m_prevTriggerFinish;  // previous value of trigger to finish
+        bool m_triggerFinishState;  // current state of finish trigger (true - finish; false - continue looping)
+        float m_loopState;          // Tracks if we are currently looping
+    };
+}

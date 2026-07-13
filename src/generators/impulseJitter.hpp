@@ -23,21 +23,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #pragma once
-#include "SC_PlugIn.h"
+#include "SC_PlugIn.hpp"
 #include "arrayheap.hpp"
 
 #define HEAP_MAX_SIZE 1024
-// Represents an ImpulseJitter UGen.
-struct ImpulseJitter : public Unit {
-    double mPhase, mPhaseOffset, mPhaseIncrement;
-    float mFreqMul;
-    IntMinHeap mImpulseHeap;
-};
 
-void ImpulseJitter_Ctor(ImpulseJitter* unit);
-void ImpulseJitter_Dtor(ImpulseJitter* unit);
-void ImpulseJitter_next_aa(ImpulseJitter* unit, int inNumSamples);
-void ImpulseJitter_next_ai(ImpulseJitter* unit, int inNumSamples);
-void ImpulseJitter_next_ak(ImpulseJitter* unit, int inNumSamples);
-void ImpulseJitter_next_ki(ImpulseJitter* unit, int inNumSamples);
-void ImpulseJitter_next_kk(ImpulseJitter* unit, int inNumSamples);
+namespace FlexPlugins {
+    // Represents an ImpulseJitter UGen.
+    class ImpulseJitter : public SCUnit {
+    public:
+        ImpulseJitter();
+        ~ImpulseJitter();
+    private:
+        void next_aa(int inNumSamples);
+        void next_ai(int inNumSamples);
+        void next_ak(int inNumSamples);
+        void next_ki(int inNumSamples);
+        void next_kk(int inNumSamples);
+        double mPhase, mPhaseOffset, mPhaseIncrement;
+        float mFreqMul;
+        IntMinHeap mImpulseHeap;
+    };
+}

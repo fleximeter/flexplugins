@@ -23,16 +23,27 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #pragma once
-#include "SC_Unit.h"
+#include "SC_PlugIn.hpp"
 
-struct PV_MagSqueeze : public Unit {};
-void PV_MagSqueeze_next(PV_MagSqueeze *unit, int inNumSamples);
-void PV_MagSqueeze_Ctor(PV_MagSqueeze *unit);
+namespace FlexPlugins {
+    class PV_MagSqueeze : public SCUnit {
+    public:
+        PV_MagSqueeze();
+    private:
+        void next(int inNumSamples);
+    };
 
-struct PV_MagMirror : public Unit {};
-void PV_MagMirror_next(PV_MagMirror *unit, int inNumSamples);
-void PV_MagMirror_Ctor(PV_MagMirror *unit);
+    class PV_MagMirror : public SCUnit {
+    public:
+        PV_MagMirror();
+    private:
+        void next(int inNumSamples);
+    };
 
-struct PV_MagXFade : public Unit {};
-void PV_MagXFade_next(PV_MagXFade *unit, int inNumSamples);
-void PV_MagXFade_Ctor(PV_MagXFade *unit);
+    class PV_MagXFade : public SCUnit {
+    public:
+        PV_MagXFade();
+    private:
+        void next(int inNumSamples);
+    };
+}

@@ -21,16 +21,16 @@ public:
     void initialize(T* buffer, size_t size);
     
     /// Determines if the buffer is ready to read `length` samples
-    bool isReadReady(size_t length);
+    bool isReadReady(size_t length) const;
 
     /// Reads a block of specified length
     void readBlock(T* destination, size_t length);
     
     /// Retrieves the size
-    size_t size();
+    size_t size() const;
 
     /// Writes a block of specified length
-    void writeBlock(T* samples, size_t length);
+    void writeBlock(const T* samples, size_t length);
     
     /// Zeros out the buffer
     void zero();
@@ -60,7 +60,7 @@ void RingBuffer<T>::initialize(T* buffer, size_t size) {
 }
 
 template <typename T>
-void RingBuffer<T>::writeBlock(T* samples, size_t length) {
+void RingBuffer<T>::writeBlock(const T* samples, size_t length) {
     if (m_buffer && m_size > 0) {
         size_t startPos = m_inputPointer;
         for (size_t i = 0; i < length; i++) {
@@ -90,7 +90,7 @@ void RingBuffer<T>::readBlock(T* destination, size_t length) {
 }
 
 template <typename T>
-bool RingBuffer<T>::isReadReady(size_t length) {
+bool RingBuffer<T>::isReadReady(size_t length) const {
     if (m_newSamples >= length) {
         return true;
     } else {
@@ -99,7 +99,7 @@ bool RingBuffer<T>::isReadReady(size_t length) {
 }
 
 template <typename T>
-size_t RingBuffer<T>::size() {
+size_t RingBuffer<T>::size() const {
     return m_size;
 }
 

@@ -22,7 +22,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_InterfaceTable.h"
 #include "pvCFreeze.hpp"
 #include "pvOther.hpp"
 #include "pvStretch.hpp"
@@ -31,9 +30,9 @@ InterfaceTable *ft;
 
 PluginLoad(PV_flexplugins) {
     ft = inTable;
-    DefineSimpleUnit(PV_MagMirror);
-    DefineSimpleUnit(PV_MagSqueeze);
-    DefineSimpleUnit(PV_MagXFade);
-    DefineDtorUnit(PV_PlayBufStretch);
-    DefineDtorUnit(PV_CFreeze);
+    registerUnit<FlexPlugins::PV_MagSqueeze>(ft, "PV_MagSqueeze", false);
+    registerUnit<FlexPlugins::PV_MagMirror>(ft, "PV_MagMirror", false);
+    registerUnit<FlexPlugins::PV_MagXFade>(ft, "PV_MagXFade", false);
+    registerUnit<FlexPlugins::PV_PlayBufStretch>(ft, "PV_PlayBufStretch", false);
+    registerUnit<FlexPlugins::PV_CFreeze>(ft, "PV_CFreeze", false);
 }

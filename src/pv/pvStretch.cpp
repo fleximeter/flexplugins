@@ -30,76 +30,77 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 extern InterfaceTable *ft;
 
-void PV_PlayBufStretch_Ctor(PV_PlayBufStretch *unit) {
+FlexPlugins::PV_PlayBufStretch::PV_PlayBufStretch() {
+    PV_PlayBufStretch *unit = this;
     PV_GET_BUF
     
     // Connect to the STFT buffer. For now, we only allow this in the constructor.
-    float fstftbufnum = IN0(1);
+    float fstftbufnum = in0(1);
     uint32 stftbufnum = static_cast<uint32>(fstftbufnum);
-    if (stftbufnum >= unit->mWorld->mNumSndBufs) stftbufnum = 0;
-    unit->m_fbufnum = fstftbufnum;
-    unit->m_buf = unit->mWorld->mSndBufs + stftbufnum;
-    unit->m_outFramePrev = nullptr;
-    unit->m_frameNext = nullptr;
-    unit->m_framePrev1 = nullptr;
-    unit->m_framePrev2 = nullptr;
-    size_t peakRadius = static_cast<size_t>(sc_clip(IN0(6), 1.f, 32.f));
-    unit->m_peakFinder = (PeakFinder*)RTAlloc(unit->mWorld, sizeof(PeakFinder));
-    new (unit->m_peakFinder) PeakFinder(static_cast<size_t>(buf->samples), peakRadius);
-    unit->m_peakFinder->memLoad(RTAlloc(unit->mWorld, unit->m_peakFinder->memSize()));
+    if (stftbufnum >= mWorld->mNumSndBufs) stftbufnum = 0;
+    m_fbufnum = fstftbufnum;
+    m_buf = mWorld->mSndBufs + stftbufnum;
+    m_outFramePrev = nullptr;
+    m_frameNext = nullptr;
+    m_framePrev1 = nullptr;
+    m_framePrev2 = nullptr;
+    size_t peakRadius = static_cast<size_t>(sc_clip(in0(6), 1.f, 32.f));
+    m_peakFinder = (PeakFinder*)RTAlloc(mWorld, sizeof(PeakFinder));
+    new (m_peakFinder) PeakFinder(static_cast<size_t>(buf->samples), peakRadius);
+    m_peakFinder->memLoad(RTAlloc(mWorld, m_peakFinder->memSize()));
     
     // Configure position
-    float startPos = sc_clip<float>(IN0(2), 0.0, 1.0);
-    unit->m_pos = 0.f;
-    unit->m_startPos = startPos;
-    unit->m_firstFrame = true;
+    float startPos = sc_clip<float>(in0(2), 0.0, 1.0);
+    m_pos = 0.f;
+    m_startPos = startPos;
+    m_firstFrame = true;
 
-    SETCALC(PV_PlayBufStretch_next);
-    OUT0(0) = IN0(0);
+    set_calc_function<PV_PlayBufStretch, &PV_PlayBufStretch::next>();
+    next(1);
 }
 
-void PV_PlayBufStretch_Dtor(PV_PlayBufStretch *unit) {
-    if (unit->m_peakFinder) {
-        void *reservedMem = unit->m_peakFinder->memRetrieve();
+FlexPlugins::PV_PlayBufStretch::~PV_PlayBufStretch() {
+    if (m_peakFinder) {
+        void *reservedMem = m_peakFinder->memRetrieve();
         if (reservedMem) {
-            RTFree(unit->mWorld, reservedMem);
+            RTFree(mWorld, reservedMem);
         }
-        RTFree(unit->mWorld, unit->m_peakFinder);
+        RTFree(mWorld, m_peakFinder);
     }
-    if (unit->m_outFramePrev) {
-        RTFree(unit->mWorld, unit->m_outFramePrev);
+    if (m_outFramePrev) {
+        RTFree(mWorld, m_outFramePrev);
     }
-    if (unit->m_frameNext) {
-        RTFree(unit->mWorld, unit->m_frameNext);
+    if (m_frameNext) {
+        RTFree(mWorld, m_frameNext);
     }
-    if (unit->m_framePrev1) {
-        RTFree(unit->mWorld, unit->m_framePrev1);
+    if (m_framePrev1) {
+        RTFree(mWorld, m_framePrev1);
     }
-    if (unit->m_framePrev2) {
-        RTFree(unit->mWorld, unit->m_framePrev2);
+    if (m_framePrev2) {
+        RTFree(mWorld, m_framePrev2);
     }
 }
 
-void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
+void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
+    PV_PlayBufStretch *unit = this;
     PV_GET_BUF
     
     // This section of the code is for acquiring the STFT buffer and information about it.
     // It has to be run every time because we cannot be sure the user has not freed the buffer.
     // We also have to verify important details about the buffer to make sure we can read from it at all.
-    const SndBuf *stftBuf = unit->m_buf;
-    if (!stftBuf) {
+    if (!m_buf) {
         OUT0(0) = -1.f;
         std::cout << "WARNING: The stftBuffer could not be accessed. Aborting.\n";
         return;
     }
     ACQUIRE_SNDBUF_SHARED(stftBuf);
-    const float* bufData __attribute__((__unused__)) = stftBuf->data;
-    const float* stftData __attribute__((__unused__)) = stftBuf->data + 3;
-    const uint32 bufChannels __attribute__((__unused__)) = stftBuf->channels;
-    const uint32 bufSamples __attribute__((__unused__)) = stftBuf->samples;
-    const uint32 bufFrames = stftBuf->frames;
+    const float* bufData __attribute__((__unused__)) = m_buf->data;
+    const float* stftData __attribute__((__unused__)) = m_buf->data + 3;
+    const uint32 bufChannels __attribute__((__unused__)) = m_buf->channels;
+    const uint32 bufSamples __attribute__((__unused__)) = m_buf->samples;
+    const uint32 bufFrames = m_buf->frames;
     // first 3 frames have analysis parameters
-    const int stftFrames = (static_cast<int>(stftBuf->samples) - 3) / static_cast<int>(buf->samples);
+    const int stftFrames = (static_cast<int>(m_buf->samples) - 3) / static_cast<int>(buf->samples);
 
     // If the buffer is improperly configured, we cannot use it.
     if (bufChannels != 1) {
@@ -133,64 +134,66 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
     }
 
     // The first time through, we need to allocate the SCPolarBuf storage in the UGen.
-    if (!unit->m_outFramePrev) {
+    if (!m_outFramePrev) {
         // This is an annoying way to have to allocate memory,
         // but it seems to be necessary based on how SCPolarBuf is defined.
-        float *outFramePrev = (float*)RTAlloc(unit->mWorld, stftBufFftSize * sizeof(float));
-        float *frameNext = (float*)RTAlloc(unit->mWorld, stftBufFftSize * sizeof(float));
-        float *framePrev1 = (float*)RTAlloc(unit->mWorld, stftBufFftSize * sizeof(float));
-        float *framePrev2 = (float*)RTAlloc(unit->mWorld, stftBufFftSize * sizeof(float));
-        unit->m_outFramePrev = (SCPolarBuf*)outFramePrev;
-        unit->m_frameNext = (SCPolarBuf*)frameNext;
-        unit->m_framePrev1 = (SCPolarBuf*)framePrev1;
-        unit->m_framePrev2 = (SCPolarBuf*)framePrev2;
+        float *outFramePrev = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
+        float *frameNext = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
+        float *framePrev1 = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
+        float *framePrev2 = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
+        m_outFramePrev = (SCPolarBuf*)outFramePrev;
+        m_frameNext = (SCPolarBuf*)frameNext;
+        m_framePrev1 = (SCPolarBuf*)framePrev1;
+        m_framePrev2 = (SCPolarBuf*)framePrev2;
     }
     
-    float startPos = sc_clip<float>(IN0(2), 0.0, 1.0);
-    const float rate = IN0(3);
-    const float loop = IN0(4);
+    float startPos = sc_clip<float>(in0(2), 0.0, 1.0);
+    const float rate = in0(3);
+    const float loop = in0(4);
     
-    if (startPos != unit->m_startPos) {
-        unit->m_startPos = startPos;
-        unit->m_firstFrame = true;
+    if (startPos != m_startPos) {
+        m_startPos = startPos;
+        m_firstFrame = true;
         // std::cout << "Start pos changed\n";
     }
 
     // Now that we've run setup, we're ready to read STFT data and perform phase vocoder stretching.
 
     // First we need to figure out where we are, and if that means we need to loop or quit.
-    float newPos = unit->m_pos + rate;
+    float newPos = m_pos + rate;
     if (newPos > stftFrames - 1) {
         if (loop && rate > 0) {
-            unit->m_firstFrame = true;
+            m_firstFrame = true;
             startPos = 0;
         } else if (rate <= 0) {
             // clip it to the last possible frame if we're working backwards
             newPos = stftFrames - 1;
         } else {
-            OUT0(0) = -1.f;
+            float *outBuf = out(0);
+            outBuf[0] = -1.f;
             RELEASE_SNDBUF_SHARED(stftBuf);
-            DoneAction(static_cast<int>(IN0(7)), unit);
+            DoneAction(static_cast<int>(in0(7)), this);
             return;
         }
     } else if (newPos < 0) {
         if (loop && rate < 0) {
-            unit->m_firstFrame = true;
+            m_firstFrame = true;
             startPos = 1;
         } else if (rate >= 0) {
             // clip it to the first frame if we're working forwards
             newPos = 0;
         } else {
-            OUT0(0) = -1.f;
+            float *outBuf = out(0);
+            outBuf[0] = -1.f;
             RELEASE_SNDBUF_SHARED(stftBuf);
-            DoneAction(static_cast<int>(IN0(7)), unit);
+            DoneAction(static_cast<int>(in0(7)), this);
             return;
         }
     }
 
     // The first frame has to be cloned directly from the STFT buffer with no phase adjustments.
     // This is essential to make sure that subsequent phase calculations are correctly aligned.
-    if (unit->m_firstFrame) {
+    if (m_firstFrame) {
         // Compute the index of the first frame
         size_t firstFrameIdx = static_cast<size_t>(std::round(startPos * (stftFrames-1)));
         
@@ -203,16 +206,16 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
         // We always need to store the resultant FFT frame in the UGen.
         // It is used in the next call to PV_PlayBufStretch_next, for 
         // phase vocoder calculations.
-        fillPolarBuf(currentFftFrame, unit->m_outFramePrev, stftBufFftSize);
+        fillPolarBuf(currentFftFrame, m_outFramePrev, stftBufFftSize);
 
         // We have to advance by one frame because we need to be able to compute frequency for time stretching.
-        unit->m_pos = static_cast<float>(firstFrameIdx + 1);
-        unit->m_firstFrame = false;
+        m_pos = static_cast<float>(firstFrameIdx + 1);
+        m_firstFrame = false;
     }
     
     // For frames other than the first frame, we'll need to perform phase computation.
     else {
-        size_t phaseLock = sc_clip(static_cast<size_t>(IN0(5)), 0, 2);
+        size_t phaseLock = sc_clip(static_cast<size_t>(in0(5)), 0, 2);
         SCPolarBuf *p = ToPolarApx(buf);
         size_t roundedPos = static_cast<size_t>(std::round(newPos));
     
@@ -226,37 +229,37 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             } else if (lastPos >= stftFrames) {
                 lastPos = roundedPos - 1;
             }
-            fillPolarBuf(stftData + (roundedPos * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
-            fillPolarBuf(stftData + (lastPos * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
+            fillPolarBuf(stftData + (roundedPos * stftBufFftSize), m_frameNext, stftBufFftSize);
+            fillPolarBuf(stftData + (lastPos * stftBufFftSize), m_framePrev1, stftBufFftSize);
             // Render the output FFT frame
             switch (phaseLock) {
                 case 1:
                     Stretch2Puckette(
-                        unit->m_frameNext, 
-                        unit->m_framePrev1, 
+                        m_frameNext, 
+                        m_framePrev1, 
                         p, 
-                        unit->m_outFramePrev, 
+                        m_outFramePrev, 
                         stftBufFftSize, 
                         stftBufHopSize
                     );
                     break;
                 case 2:
                     Stretch2LarocheDolson(
-                        unit->m_frameNext, 
-                        unit->m_framePrev1, 
+                        m_frameNext, 
+                        m_framePrev1, 
                         p, 
-                        unit->m_outFramePrev, 
-                        unit->m_peakFinder,
+                        m_outFramePrev, 
+                        m_peakFinder,
                         stftBufFftSize, 
                         stftBufHopSize
                     );
                     break;
                 default:
                     Stretch2(
-                        unit->m_frameNext, 
-                        unit->m_framePrev1, 
+                        m_frameNext, 
+                        m_framePrev1, 
                         p, 
-                        unit->m_outFramePrev, 
+                        m_outFramePrev, 
                         stftBufFftSize, 
                         stftBufHopSize
                     );
@@ -277,19 +280,19 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
             }
 
             // We are in between these two frames
-            fillPolarBuf(stftData + (hi * stftBufFftSize), unit->m_frameNext, stftBufFftSize);
-            fillPolarBuf(stftData + (lo * stftBufFftSize), unit->m_framePrev1, stftBufFftSize);
+            fillPolarBuf(stftData + (hi * stftBufFftSize), m_frameNext, stftBufFftSize);
+            fillPolarBuf(stftData + (lo * stftBufFftSize), m_framePrev1, stftBufFftSize);
             // This is the frame right before that. It's needed to compute the previous instantaneous frequencies.
-            fillPolarBuf(stftData + (loprev * stftBufFftSize), unit->m_framePrev2, stftBufFftSize);
+            fillPolarBuf(stftData + (loprev * stftBufFftSize), m_framePrev2, stftBufFftSize);
             // Render the output FFT frame
             switch (phaseLock) {
                 case 1:
                     Stretch3Puckette(
-                        unit->m_frameNext, 
-                        unit->m_framePrev1,
-                        unit->m_framePrev2, 
+                        m_frameNext, 
+                        m_framePrev1,
+                        m_framePrev2, 
                         p, 
-                        unit->m_outFramePrev,
+                        m_outFramePrev,
                         newPos-static_cast<float>(lo), 
                         stftBufFftSize, 
                         stftBufHopSize
@@ -297,12 +300,12 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
                     break;
                 case 2:
                     Stretch3LarocheDolson(
-                        unit->m_frameNext, 
-                        unit->m_framePrev1, 
-                        unit->m_framePrev2, 
+                        m_frameNext, 
+                        m_framePrev1, 
+                        m_framePrev2, 
                         p, 
-                        unit->m_outFramePrev, 
-                        unit->m_peakFinder,
+                        m_outFramePrev, 
+                        m_peakFinder,
                         newPos-static_cast<float>(lo), 
                         stftBufFftSize, 
                         stftBufHopSize
@@ -310,11 +313,11 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
                     break;
                 default:
                     Stretch3(
-                        unit->m_frameNext, 
-                        unit->m_framePrev1, 
-                        unit->m_framePrev2, 
+                        m_frameNext, 
+                        m_framePrev1, 
+                        m_framePrev2, 
                         p, 
-                        unit->m_outFramePrev, 
+                        m_outFramePrev, 
                         newPos-static_cast<float>(lo), 
                         stftBufFftSize, 
                         stftBufHopSize
@@ -324,8 +327,8 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
         // We always need to store the resultant FFT frame in the UGen.
         // It is used in the next call to PV_PlayBufStretch_next, for 
         // phase vocoder calculations.
-        copyPolarBuf(p, unit->m_outFramePrev, static_cast<size_t>(numbins));
-        unit->m_pos = newPos;
+        copyPolarBuf(p, m_outFramePrev, static_cast<size_t>(numbins));
+        m_pos = newPos;
     }
 
     RELEASE_SNDBUF_SHARED(stftBuf);
@@ -342,7 +345,7 @@ void PV_PlayBufStretch_next(PV_PlayBufStretch *unit, int inNumSamples) {
 /// \param outFramePrev The previously computed output STFT frame
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-void Stretch2(
+void FlexPlugins::PV_PlayBufStretch::Stretch2(
     const SCPolarBuf *frame, 
     const SCPolarBuf *framePrev, 
     SCPolarBuf *outFrame, 
@@ -381,7 +384,7 @@ void Stretch2(
 /// \param outFramePrev The previously computed output STFT frame
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-void Stretch2Puckette(
+void FlexPlugins::PV_PlayBufStretch::Stretch2Puckette(
     const SCPolarBuf *frame, 
     const SCPolarBuf *framePrev, 
     SCPolarBuf *outFrame, 
@@ -434,7 +437,7 @@ void Stretch2Puckette(
 /// \param peakFinder The PeakFinder instance for determining peak locations in the magnitude spectrum
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-void Stretch2LarocheDolson(
+void FlexPlugins::PV_PlayBufStretch::Stretch2LarocheDolson(
     const SCPolarBuf *frame, 
     const SCPolarBuf *framePrev, 
     SCPolarBuf *outFrame, 
@@ -550,7 +553,7 @@ void Stretch2LarocheDolson(
 /// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-void Stretch3(
+void FlexPlugins::PV_PlayBufStretch::Stretch3(
     const SCPolarBuf *frameNext, 
     const SCPolarBuf *framePrev1,
     const SCPolarBuf *framePrev2, 
@@ -602,7 +605,7 @@ void Stretch3(
 /// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-void Stretch3Puckette(
+void FlexPlugins::PV_PlayBufStretch::Stretch3Puckette(
     const SCPolarBuf *frameNext, 
     const SCPolarBuf *framePrev1,
     const SCPolarBuf *framePrev2, 
@@ -668,7 +671,7 @@ void Stretch3Puckette(
 /// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
-static void Stretch3LarocheDolson(
+void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
     const SCPolarBuf *frameNext,
     const SCPolarBuf *framePrev1, 
     const SCPolarBuf *framePrev2, 
@@ -821,7 +824,7 @@ static void Stretch3LarocheDolson(
 /// \param fftBuf The FFT frame from the STFT buffer
 /// \param [out] polarBuf The SCPolarBuf to copy to
 /// \param fftSize The FFT size
-void fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, size_t fftSize) {
+void FlexPlugins::PV_PlayBufStretch::fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, size_t fftSize) {
     polarBuf->dc = fftBuf[0];
     polarBuf->nyq = fftBuf[1];
     for (size_t xxn = 2, xxk = 0; xxn < fftSize; xxn+=2, xxk++) {
@@ -837,7 +840,7 @@ void fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, size_t fftSize) {
 /// \param sourceBuf The source buffer
 /// \param [out] destBuf The destination buffer
 /// \param numbins The number of bins in the SCPolarBuf (fftSize/2-1)
-void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbins) {
+void FlexPlugins::PV_PlayBufStretch::copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbins) {
     destBuf->dc = sourceBuf->dc;
     destBuf->nyq = sourceBuf->nyq;
     for (size_t xxn = 0; xxn < numbins; xxn++) {
@@ -846,11 +849,10 @@ void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbi
     }
 }
 
+FlexPlugins::Peak::Peak(size_t peak) : peak(peak) {}
+FlexPlugins::Peak::Peak(size_t peak, size_t leftValley, size_t rightValley) : peak(peak), leftValley(leftValley), rightValley(rightValley) {}
 
-Peak::Peak(size_t peak) : peak(peak) {}
-Peak::Peak(size_t peak, size_t leftValley, size_t rightValley) : peak(peak), leftValley(leftValley), rightValley(rightValley) {}
-
-PeakFinder::PeakFinder(size_t fftSize, size_t radius) {
+FlexPlugins::PeakFinder::PeakFinder(size_t fftSize, size_t radius) {
     m_maxSize = fftSize/2-1;
     m_radius = radius;
     m_size = 0;
@@ -859,34 +861,34 @@ PeakFinder::PeakFinder(size_t fftSize, size_t radius) {
     m_queueR = nullptr;
 }
 
-void PeakFinder::memLoad(void* arr) {
+void FlexPlugins::PeakFinder::memLoad(void* arr) {
     size_t *data = (size_t*)arr;
     m_queueL = data;
     m_queueR = data + m_radius;
     peaks = (Peak*)(data + 2 * m_radius);
 }
 
-size_t PeakFinder::memSize() const {
+size_t FlexPlugins::PeakFinder::memSize() const {
     return m_radius * 2 * sizeof(size_t) + m_maxSize * sizeof(Peak);
 }
 
-void* PeakFinder::memRetrieve() {
+void* FlexPlugins::PeakFinder::memRetrieve() {
     return (void*)m_queueL;
 }
 
-void PeakFinder::clear() {
+void FlexPlugins::PeakFinder::clear() {
     m_size = 0;
 }
 
-size_t PeakFinder::maxSize() const {
+size_t FlexPlugins::PeakFinder::maxSize() const {
     return m_maxSize;
 }
 
-size_t PeakFinder::size() const {
+size_t FlexPlugins::PeakFinder::size() const {
     return m_size;
 }
 
-void PeakFinder::analyze(const SCPolarBuf *buf) {
+void FlexPlugins::PeakFinder::analyze(const SCPolarBuf *buf) {
     // We can only perform the analysis if we have enough bins
     if (m_queueL && m_maxSize > m_radius * 2 + 1) {
         m_size = 0;  // clear any existing data

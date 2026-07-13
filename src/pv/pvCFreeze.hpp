@@ -23,19 +23,24 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #pragma once
-#include "SC_Unit.h"
+#include "SC_PlugIn.hpp"
 
-struct PV_CFreeze : public Unit {
-    int mNumBins;    // The number of FFT bins
-    int mNumFrames;  // The number of candidate FFT frames to maintain
-    float *mMags;    // The 2D array of FFT mags
-    float *mDc;      // The 1D array of FFT DC values
-    float *mNyq;     // The 1D array of FFT Nyquist values
-    float *mPhase;   // The most recent phase array
-    float *mPhaseDiffs;  // The 2D array of FFT phase differences
-    size_t mWritePtr;   // The write pointer
-};
+namespace FlexPlugins {
+    class PV_CFreeze : public SCUnit {
+    public:
+        PV_CFreeze();
+        ~PV_CFreeze();
 
-void PV_CFreeze_next(PV_CFreeze *unit, int inNumSamples);
-void PV_CFreeze_Ctor(PV_CFreeze *unit);
-void PV_CFreeze_Dtor(PV_CFreeze *unit);
+    private:
+        void next(int inNumSamples);
+
+        int mNumBins;    // The number of FFT bins
+        int mNumFrames;  // The number of candidate FFT frames to maintain
+        float *mMags;    // The 2D array of FFT mags
+        float *mDc;      // The 1D array of FFT DC values
+        float *mNyq;     // The 1D array of FFT Nyquist values
+        float *mPhase;   // The most recent phase array
+        float *mPhaseDiffs;  // The 2D array of FFT phase differences
+        size_t mWritePtr;   // The write pointer
+    };
+}

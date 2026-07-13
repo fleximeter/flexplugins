@@ -25,7 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "fir.hpp"
 extern InterfaceTable *ft;
 
-FIR::FIR() {
+FlexPlugins::FIR::FIR() {
     m_z = static_cast<float*>(RTAlloc(mWorld, fullBufferSize() * sizeof(float)));
     for (size_t i = 0; i < fullBufferSize(); i++) {
         m_z[i] = 0.f;
@@ -34,26 +34,26 @@ FIR::FIR() {
     next(1);
 }
 
-FIR::~FIR() {
+FlexPlugins::FIR::~FIR() {
     if (m_z) RTFree(mWorld, m_z);
 }
 
-void FIR::next(int inNumSamples) {
+void FlexPlugins::FIR::next(int inNumSamples) {
     size_t numCoefs = static_cast<size_t>(mNumInputs - 1);
     numCoefs = sc_clip(numCoefs, 0, static_cast<size_t>(fullBufferSize()));
     const float *inBuf = in(0);
     float *outBuf = out(0);
-    for (size_t xxi = 0; xxi < inNumSamples; xxi++) {
+    for (size_t i = 0; i < inNumSamples; i++) {
         float convResult = 0.f;
         // unit delay
-        for (size_t xxj = fullBufferSize() - 1; xxj > 0; xxj--) {
-            m_z[xxj] = m_z[xxj-1];
+        for (size_t j = fullBufferSize() - 1; j > 0; j--) {
+            m_z[j] = m_z[j-1];
         }
-        m_z[0] = inBuf[xxi];
+        m_z[0] = inBuf[i];
         // convolve
-        for (size_t xxk = 0; xxk < numCoefs; xxk++) {
-            convResult += in0(1+xxk) * m_z[xxk];
+        for (size_t k = 0; k < numCoefs; k++) {
+            convResult += in0(1+k) * m_z[k];
         }
-        outBuf[xxi] = convResult;
+        outBuf[i] = convResult;
     }
 }

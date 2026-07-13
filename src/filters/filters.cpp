@@ -22,12 +22,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_PlugIn.h"
 #include "fir.hpp"
 
 InterfaceTable *ft;
 
 PluginLoad(flex_filters) {
     ft = inTable;
-    registerUnit<FIR>(ft, "FIR", false);
+    registerUnit<FlexPlugins::FIR>(ft, "FIR", false);
 }

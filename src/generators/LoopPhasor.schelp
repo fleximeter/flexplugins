@@ -67,27 +67,29 @@ b = Buffer.read(s, p);
 x = Bus.audio(s, 1);
 
 SynthDef(\ptr, {
-	var sig;
-	sig = LoopPhasor.ar(\t_start.tr(0.0), \t_end.tr(0.0), \rate.kr(1.0) * BufRateScale.ir(b), 0.0, BufFrames.kr(b), \loopStart.ir(0), \loopEnd.ir(1));
-	Out.ar(\out.kr(0), sig);
+	arg rate=1, loopStart=0, loopEnd=1, out=0, trigEnd=0.0;
+    var sig;
+	sig = LoopPhasor.ar(0.0, trigEnd, 1 * BufRateScale.ir(b), 0.0, BufFrames.ir(b), loopStart, loopEnd);
+	sig.poll;
+    Out.ar(out, sig); 
 }).add;
 
 SynthDef(\player, {
-	var sig, ptr_in;
-	ptr_in = In.ar(\ptr.kr(0));
-	sig = BufRd.ar(1, b, ptr_in, 0);
-	Out.ar(0, sig);
+	arg ptr;
+    var sig, ptr_in;
+    ptr_in = In.ar(ptr);
+    sig = BufRd.ar(1, b, ptr_in, 0);
+    Out.ar(0, sig);
 }).add;
+)
 
 // we need two synths: a pointer synth and a player synth
-y = Synth(\ptr, [\out, x, \loopStart, 80e3, \loopEnd, 120e3]);
+y = Synth(\ptr, [\out, x, \loopStart, 8e4, \loopEnd, 9e4]);
 z = Synth(\player, [\ptr, x], addAction: \addToTail);
 
 // to stop looping and end naturally
-y.set(\t_end, 1.0);
+y.set(\trigEnd, 1.0);
 
-// free the synths
 z.free;
 y.free;
-)
 ::
