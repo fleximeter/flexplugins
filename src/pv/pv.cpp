@@ -22,7 +22,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SC_InterfaceTable.h"
 #include "pvCFreeze.hpp"
 #include "pvOther.hpp"
 #include "pvStretch.hpp"
@@ -34,6 +33,6 @@ PluginLoad(PV_flexplugins) {
     registerUnit<FlexPlugins::PV_MagSqueeze>(ft, "PV_MagSqueeze", false);
     registerUnit<FlexPlugins::PV_MagMirror>(ft, "PV_MagMirror", false);
     registerUnit<FlexPlugins::PV_MagXFade>(ft, "PV_MagXFade", false);
-    DefineDtorUnit(PV_PlayBufStretch);
+    registerUnit<FlexPlugins::PV_PlayBufStretch>(ft, "PV_PlayBufStretch", false);
     registerUnit<FlexPlugins::PV_CFreeze>(ft, "PV_CFreeze", false);
 }
