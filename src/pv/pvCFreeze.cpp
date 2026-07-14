@@ -63,22 +63,22 @@ void FlexPlugins::PV_CFreeze::next(int inNumSamples) {
         // Pull random DC and nyquist magnitudes
         p->dc = mDc[rgen.irand(mNumFrames)];
         p->nyq = mNyq[rgen.irand(mNumFrames)];
-        for (int xxn = 0; xxn < mNumBins; xxn++) {
+        for (int k = 0; k < mNumBins; k++) {
             // For each bin, grab a random magnitude and phase diff pair
             int idx = rgen.irand(mNumFrames);
-            idx = idx * mNumBins + xxn;
-            p->bin[xxn].mag = mMags[idx];
-            mPhase[xxn] = sc_wrap(mPhase[xxn] + mPhaseDiffs[idx], 0.f, static_cast<float>(twopi));
-            p->bin[xxn].phase = mPhase[xxn];
+            idx = idx * mNumBins + k;
+            p->bin[k].mag = mMags[idx];
+            mPhase[k] = sc_wrap(mPhase[k] + mPhaseDiffs[idx], 0.f, static_cast<float>(twopi));
+            p->bin[k].phase = mPhase[k];
         }
     } else {
         // We're writing to a circular buffer, so pull the current magnitude and phase diff arrays
         float *currentMagArr = mMags + (mWritePtr * mNumBins);
         float *currentPhaseDiffArr = mPhaseDiffs + (mWritePtr * mNumBins);
-        for (int xxn = 0; xxn < numbins; xxn++) {
-            currentMagArr[xxn] = p->bin[xxn].mag;
-            currentPhaseDiffArr[xxn] = sc_wrap(p->bin[xxn].phase - mPhase[xxn], 0.f, static_cast<float>(twopi));
-            mPhase[xxn] = p->bin[xxn].phase;
+        for (int k = 0; k < numbins; k++) {
+            currentMagArr[k] = p->bin[k].mag;
+            currentPhaseDiffArr[k] = sc_wrap(p->bin[k].phase - mPhase[k], 0.f, static_cast<float>(twopi));
+            mPhase[k] = p->bin[k].phase;
         }
         mDc[mWritePtr] = p->dc;
         mNyq[mWritePtr] = p->nyq;

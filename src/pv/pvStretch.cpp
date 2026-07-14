@@ -354,18 +354,18 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2(
     size_t hopSize) {
     outFrame->dc = frame->dc;
     outFrame->nyq = frame->nyq;
-    for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
-        outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+    for (size_t k = 0; k < fftSize/2-1; k++) {
+        outFrame->bin[k].mag = frame->bin[k].mag;
 
         // Compute the instantaneous frequency
-        float omegaK = twopi * (xxk+1) / fftSize;
-        float phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+        float omegaK = twopi * (k+1) / fftSize;
+        float phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
         phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
         float instantaneousFreq = omegaK + phaseInc/hopSize;
         
         // Compute the new phase
-        outFrame->bin[xxk].phase = sc_wrap(
-            outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+        outFrame->bin[k].phase = sc_wrap(
+            outFramePrev->bin[k].phase + static_cast<float>(hopSize * instantaneousFreq),
             0.f,
             static_cast<float>(twopi));
     }
@@ -393,31 +393,31 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2Puckette(
     size_t hopSize) {
     outFrame->dc = frame->dc;
     outFrame->nyq = frame->nyq;
-    for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
-        outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+    for (size_t k = 0; k < fftSize/2-1; k++) {
+        outFrame->bin[k].mag = frame->bin[k].mag;
 
         // Compute the instantaneous frequency
-        float omegaK = twopi * (xxk+1) / fftSize;
-        float phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+        float omegaK = twopi * (k+1) / fftSize;
+        float phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
         phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
         float instantaneousFreq = omegaK + phaseInc/hopSize;
 
         // In Puckette-style phase locking, we make a substitution for the previous phase,
         // in order to "lock" phases of adjacent bins together.
         float prevPhase = 0.0;
-        if (xxk == 0) {
-            prevPhase = outFramePrev->bin[xxk].phase;
-        } else if (xxk == fftSize/2-2) {
-            prevPhase = outFramePrev->bin[xxk].phase;
+        if (k == 0) {
+            prevPhase = outFramePrev->bin[k].phase;
+        } else if (k == fftSize/2-2) {
+            prevPhase = outFramePrev->bin[k].phase;
         } else {
-            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[k-1].mag, outFramePrev->bin[k-1].phase);
+            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[k].mag, outFramePrev->bin[k].phase);
+            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[k+1].mag, outFramePrev->bin[k+1].phase);
             prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
         }
         
         // Compute the new phase
-        outFrame->bin[xxk].phase = sc_wrap(
+        outFrame->bin[k].phase = sc_wrap(
             prevPhase + static_cast<float>(hopSize * instantaneousFreq),
             0.f,
             static_cast<float>(twopi));
@@ -453,60 +453,60 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2LarocheDolson(
 
     if (peakFinder->size() == 0) {
         // No phase locking if no peaks were acquired
-        for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
-            outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+        for (size_t k = 0; k < fftSize/2-1; k++) {
+            outFrame->bin[k].mag = frame->bin[k].mag;
 
             // Compute the instantaneous frequency
-            double omegaK = twopi * (xxk+1) / fftSize;
-            double phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+            double omegaK = twopi * (k+1) / fftSize;
+            double phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
             phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
             double instantaneousFreq = omegaK + phaseInc/hopSize;
 
             // Compute the phase
-            outFrame->bin[xxk].phase = sc_wrap(
-                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+            outFrame->bin[k].phase = sc_wrap(
+                outFramePrev->bin[k].phase + static_cast<float>(hopSize * instantaneousFreq),
                 0.f,
                 static_cast<float>(twopi));
         }
     } else {
         // Update any bins that occur below the lowest peak's region of influence
-        for (size_t xxk = 0; xxk < peakFinder->peaks[0].leftValley; xxk++) {
-            outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+        for (size_t k = 0; k < peakFinder->peaks[0].leftValley; k++) {
+            outFrame->bin[k].mag = frame->bin[k].mag;
 
             // Compute the instantaneous frequency
-            double omegaK = twopi * (xxk+1) / fftSize;
-            double phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+            double omegaK = twopi * (k+1) / fftSize;
+            double phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
             phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
             double instantaneousFreq = omegaK + phaseInc/hopSize;
 
             // Compute the phase
-            outFrame->bin[xxk].phase = sc_wrap(
-                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+            outFrame->bin[k].phase = sc_wrap(
+                outFramePrev->bin[k].phase + static_cast<float>(hopSize * instantaneousFreq),
                 0.f,
                 static_cast<float>(twopi));
         }
 
         // Update any bins that occur above the highest peak's region of influence
-        for (size_t xxk = peakFinder->peaks[peakFinder->size()-1].rightValley + 1; xxk < fftSize / 2 - 1; xxk++) {
-            outFrame->bin[xxk].mag = frame->bin[xxk].mag;
+        for (size_t k = peakFinder->peaks[peakFinder->size()-1].rightValley + 1; k < fftSize / 2 - 1; k++) {
+            outFrame->bin[k].mag = frame->bin[k].mag;
 
             // Compute the instantaneous frequency
-            double omegaK = twopi * (xxk+1) / fftSize;
-            double phaseInc = frame->bin[xxk].phase - framePrev->bin[xxk].phase - hopSize * omegaK;
+            double omegaK = twopi * (k+1) / fftSize;
+            double phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
             phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
             double instantaneousFreq = omegaK + phaseInc/hopSize;
 
             // Compute the phase
-            outFrame->bin[xxk].phase = sc_wrap(
-                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+            outFrame->bin[k].phase = sc_wrap(
+                outFramePrev->bin[k].phase + static_cast<float>(hopSize * instantaneousFreq),
                 0.f,
                 static_cast<float>(twopi));
         }
 
         // Update all other peaks
-        for (size_t xxn = 0; xxn < peakFinder->size(); xxn++) {
+        for (size_t n = 0; n < peakFinder->size(); n++) {
             // First we compute the new phase for the peak bin as usual
-            Peak peak = peakFinder->peaks[xxn];
+            Peak peak = peakFinder->peaks[n];
             outFrame->bin[peak.peak].mag = frame->bin[peak.peak].mag;
 
             // Compute the instantaneous frequency
@@ -522,17 +522,17 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2LarocheDolson(
                 static_cast<float>(twopi));
 
             // Then we update the phases of all other peaks
-            for (size_t xxo = peak.leftValley; xxo < peak.peak; xxo++) {
-                outFrame->bin[xxo].mag = frame->bin[xxo].mag;
-                outFrame->bin[xxo].phase = sc_wrap(
-                    outFrame->bin[peak.peak].phase + frame->bin[xxo].phase - frame->bin[peak.peak].phase,
+            for (size_t o = peak.leftValley; o < peak.peak; o++) {
+                outFrame->bin[o].mag = frame->bin[o].mag;
+                outFrame->bin[o].phase = sc_wrap(
+                    outFrame->bin[peak.peak].phase + frame->bin[o].phase - frame->bin[peak.peak].phase,
                     0.f,
                     static_cast<float>(twopi));
             }
-            for (size_t xxo = peak.peak + 1; xxo <= peak.rightValley; xxo++) {
-                outFrame->bin[xxo].mag = frame->bin[xxo].mag;
-                outFrame->bin[xxo].phase = sc_wrap(
-                    outFrame->bin[peak.peak].phase + frame->bin[xxo].phase - frame->bin[peak.peak].phase,
+            for (size_t o = peak.peak + 1; o <= peak.rightValley; o++) {
+                outFrame->bin[o].mag = frame->bin[o].mag;
+                outFrame->bin[o].phase = sc_wrap(
+                    outFrame->bin[peak.peak].phase + frame->bin[o].phase - frame->bin[peak.peak].phase,
                     0.f,
                     static_cast<float>(twopi));
             }
@@ -564,18 +564,18 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3(
     size_t hopSize) {
     outFrame->dc = INTERP(framePrev1->dc, frameNext->dc, pos);
     outFrame->nyq = INTERP(framePrev1->nyq, frameNext->nyq, pos);
-    for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
-        outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+    for (size_t k = 0; k < fftSize/2-1; k++) {
+        outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
 
-        float omegaK = twopi * (xxk+1) / fftSize;
+        float omegaK = twopi * (k+1) / fftSize;
 
         // Compute the next instantaneous frequency
-        float phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+        float phaseInc = frameNext->bin[k].phase - framePrev1->bin[k].phase - hopSize * omegaK;
         phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
         float instantaneousFreqNext = omegaK + phaseInc/hopSize;
 
         // Compute the previous instantaneous frequency
-        phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+        phaseInc = framePrev1->bin[k].phase - framePrev2->bin[k].phase - hopSize * omegaK;
         phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
         float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
@@ -583,8 +583,8 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3(
         float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
         
         // Compute the new phase
-        outFrame->bin[xxk].phase = sc_wrap(
-            outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+        outFrame->bin[k].phase = sc_wrap(
+            outFramePrev->bin[k].phase + static_cast<float>(hopSize * instantaneousFreq),
             0.f,
             static_cast<float>(twopi));
     }
@@ -616,18 +616,18 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3Puckette(
     size_t hopSize) {
     outFrame->dc = INTERP(framePrev1->dc, frameNext->dc, pos);
     outFrame->nyq = INTERP(framePrev1->nyq, frameNext->nyq, pos);
-    for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
-        outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+    for (size_t k = 0; k < fftSize/2-1; k++) {
+        outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
 
-        float omegaK = twopi * (xxk+1) / fftSize;
+        float omegaK = twopi * (k+1) / fftSize;
 
         // Compute the next instantaneous frequency
-        float phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+        float phaseInc = frameNext->bin[k].phase - framePrev1->bin[k].phase - hopSize * omegaK;
         phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
         float instantaneousFreqNext = omegaK + phaseInc/hopSize;
 
         // Compute the previous instantaneous frequency
-        phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+        phaseInc = framePrev1->bin[k].phase - framePrev2->bin[k].phase - hopSize * omegaK;
         phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
         float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
@@ -637,19 +637,19 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3Puckette(
         // In Puckette-style phase locking, we make a substitution for the previous phase,
         // in order to "lock" phases of adjacent bins together.
         float prevPhase = 0.0;
-        if (xxk == 0) {
-            prevPhase = outFramePrev->bin[xxk].phase;
-        } else if (xxk == fftSize/2-2) {
-            prevPhase = outFramePrev->bin[xxk].phase;
+        if (k == 0) {
+            prevPhase = outFramePrev->bin[k].phase;
+        } else if (k == fftSize/2-2) {
+            prevPhase = outFramePrev->bin[k].phase;
         } else {
-            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[xxk-1].mag, outFramePrev->bin[xxk-1].phase);
-            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[xxk].mag, outFramePrev->bin[xxk].phase);
-            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[xxk+1].mag, outFramePrev->bin[xxk+1].phase);
+            std::complex<float> prevBinKMinus1 = std::polar<float>(outFramePrev->bin[k-1].mag, outFramePrev->bin[k-1].phase);
+            std::complex<float> prevBinK = std::polar<float>(outFramePrev->bin[k].mag, outFramePrev->bin[k].phase);
+            std::complex<float> prevBinKPlus1 = std::polar<float>(outFramePrev->bin[k+1].mag, outFramePrev->bin[k+1].phase);
             prevPhase = std::arg(prevBinK - prevBinKMinus1 - prevBinKPlus1);
         }
         
         // Compute the new phase
-        outFrame->bin[xxk].phase = sc_wrap(
+        outFrame->bin[k].phase = sc_wrap(
             prevPhase + static_cast<float>(hopSize * instantaneousFreq),
             0.f,
             static_cast<float>(twopi));
@@ -697,18 +697,18 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
 
     if (peakFinder->size() == 0) {
         // No phase locking if no peaks were acquired
-        for (size_t xxk = 0; xxk < fftSize/2-1; xxk++) {
-            outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+        for (size_t k = 0; k < fftSize/2-1; k++) {
+            outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
             
-            double omegaK = twopi * (xxk+1) / fftSize;
+            double omegaK = twopi * (k+1) / fftSize;
 
             // Compute the next instantaneous frequency
-            double phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+            double phaseInc = frameNext->bin[k].phase - framePrev1->bin[k].phase - hopSize * omegaK;
             phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
             double instantaneousFreqNext = omegaK + phaseInc/hopSize;
 
             // Compute the previous instantaneous frequency
-            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = framePrev1->bin[k].phase - framePrev2->bin[k].phase - hopSize * omegaK;
             phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
             double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
@@ -716,25 +716,25 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
             double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
             
             // Compute the new phase
-            outFrame->bin[xxk].phase = sc_wrap(
-                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+            outFrame->bin[k].phase = sc_wrap(
+                outFramePrev->bin[k].phase + static_cast<float>(hopSize * instantaneousFreq),
                 0.f,
                 static_cast<float>(twopi));
         }
     } else {
         // Update any bins that occur below the lowest peak's region of influence
-        for (size_t xxk = 0; xxk < peakFinder->peaks[0].leftValley; xxk++) {
-            outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+        for (size_t k = 0; k < peakFinder->peaks[0].leftValley; k++) {
+            outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
 
             // Compute the instantaneous frequency
-            double omegaK = twopi * (xxk+1) / fftSize;
+            double omegaK = twopi * (k+1) / fftSize;
 
-            double phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+            double phaseInc = frameNext->bin[k].phase - framePrev1->bin[k].phase - hopSize * omegaK;
             phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
             double instantaneousFreqNext = omegaK + phaseInc/hopSize;
 
             // Compute the previous instantaneous frequency
-            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = framePrev1->bin[k].phase - framePrev2->bin[k].phase - hopSize * omegaK;
             phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
             double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
@@ -742,25 +742,25 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
             double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
 
             // Compute the phase
-            outFrame->bin[xxk].phase = sc_wrap(
-                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+            outFrame->bin[k].phase = sc_wrap(
+                outFramePrev->bin[k].phase + static_cast<float>(hopSize * instantaneousFreq),
                 0.f,
                 static_cast<float>(twopi));
         }
 
         // Update any bins that occur above the highest peak's region of influence
-        for (size_t xxk = peakFinder->peaks[peakFinder->size()-1].rightValley + 1; xxk < fftSize / 2 - 1; xxk++) {
-            outFrame->bin[xxk].mag = INTERP(framePrev1->bin[xxk].mag, frameNext->bin[xxk].mag, pos);
+        for (size_t k = peakFinder->peaks[peakFinder->size()-1].rightValley + 1; k < fftSize / 2 - 1; k++) {
+            outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
 
             // Compute the instantaneous frequency
-            double omegaK = twopi * (xxk+1) / fftSize;
+            double omegaK = twopi * (k+1) / fftSize;
 
-            double phaseInc = frameNext->bin[xxk].phase - framePrev1->bin[xxk].phase - hopSize * omegaK;
+            double phaseInc = frameNext->bin[k].phase - framePrev1->bin[k].phase - hopSize * omegaK;
             phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
             double instantaneousFreqNext = omegaK + phaseInc/hopSize;
 
             // Compute the previous instantaneous frequency
-            phaseInc = framePrev1->bin[xxk].phase - framePrev2->bin[xxk].phase - hopSize * omegaK;
+            phaseInc = framePrev1->bin[k].phase - framePrev2->bin[k].phase - hopSize * omegaK;
             phaseInc = std::fmod(phaseInc + pi, twopi) - pi;
             double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
@@ -768,15 +768,15 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
             double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
 
             // Compute the phase
-            outFrame->bin[xxk].phase = sc_wrap(
-                outFramePrev->bin[xxk].phase + static_cast<float>(hopSize * instantaneousFreq),
+            outFrame->bin[k].phase = sc_wrap(
+                outFramePrev->bin[k].phase + static_cast<float>(hopSize * instantaneousFreq),
                 0.f,
                 static_cast<float>(twopi));
         }
         
-        for (size_t xxn = 0; xxn < peakFinder->size(); xxn++) {
+        for (size_t n = 0; n < peakFinder->size(); n++) {
             // First we compute the new phase for the peak bin as usual
-            Peak peak = peakFinder->peaks[xxn];
+            Peak peak = peakFinder->peaks[n];
             outFrame->bin[peak.peak].mag = INTERP(framePrev1->bin[peak.peak].mag, frameNext->bin[peak.peak].mag, pos);
             
             // Compute the instantaneous frequency
@@ -801,17 +801,17 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
                 static_cast<float>(twopi));
 
             // Then we update all bins in the region of influence
-            for (size_t xxo = peak.leftValley; xxo < peak.peak; xxo++) {
-                outFrame->bin[xxo].mag = INTERP(framePrev1->bin[xxo].mag, frameNext->bin[xxo].mag, pos);
-                outFrame->bin[xxo].phase = sc_wrap(
-                    outFrame->bin[peak.peak].phase + cframe->bin[xxo].phase - cframe->bin[peak.peak].phase,
+            for (size_t o = peak.leftValley; o < peak.peak; o++) {
+                outFrame->bin[o].mag = INTERP(framePrev1->bin[o].mag, frameNext->bin[o].mag, pos);
+                outFrame->bin[o].phase = sc_wrap(
+                    outFrame->bin[peak.peak].phase + cframe->bin[o].phase - cframe->bin[peak.peak].phase,
                     0.f,
                     static_cast<float>(twopi));
             }
-            for (size_t xxo = peak.peak + 1; xxo <= peak.rightValley; xxo++) {
-                outFrame->bin[xxo].mag = INTERP(framePrev1->bin[xxo].mag, frameNext->bin[xxo].mag, pos);
-                outFrame->bin[xxo].phase = sc_wrap(
-                    outFrame->bin[peak.peak].phase + cframe->bin[xxo].phase - cframe->bin[peak.peak].phase,
+            for (size_t o = peak.peak + 1; o <= peak.rightValley; o++) {
+                outFrame->bin[o].mag = INTERP(framePrev1->bin[o].mag, frameNext->bin[o].mag, pos);
+                outFrame->bin[o].phase = sc_wrap(
+                    outFrame->bin[peak.peak].phase + cframe->bin[o].phase - cframe->bin[peak.peak].phase,
                     0.f,
                     static_cast<float>(twopi));
             }
@@ -827,11 +827,11 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
 void FlexPlugins::PV_PlayBufStretch::fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, size_t fftSize) {
     polarBuf->dc = fftBuf[0];
     polarBuf->nyq = fftBuf[1];
-    for (size_t xxn = 2, xxk = 0; xxn < fftSize; xxn+=2, xxk++) {
+    for (size_t n = 2, k = 0; n < fftSize; n+=2, k++) {
         // For some reason the phase is stored first, then the magnitude.
         // This prevents a direct cast to SCPolarBuf, unfortunately.
-        polarBuf->bin[xxk].phase = fftBuf[xxn];
-        polarBuf->bin[xxk].mag = fftBuf[xxn+1];
+        polarBuf->bin[k].phase = fftBuf[n];
+        polarBuf->bin[k].mag = fftBuf[n+1];
     }
 }
 
@@ -843,9 +843,9 @@ void FlexPlugins::PV_PlayBufStretch::fillPolarBuf(const float *fftBuf, SCPolarBu
 void FlexPlugins::PV_PlayBufStretch::copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbins) {
     destBuf->dc = sourceBuf->dc;
     destBuf->nyq = sourceBuf->nyq;
-    for (size_t xxn = 0; xxn < numbins; xxn++) {
-        destBuf->bin[xxn].mag = sourceBuf->bin[xxn].mag;
-        destBuf->bin[xxn].phase = sourceBuf->bin[xxn].phase;
+    for (size_t n = 0; n < numbins; n++) {
+        destBuf->bin[n].mag = sourceBuf->bin[n].mag;
+        destBuf->bin[n].phase = sourceBuf->bin[n].phase;
     }
 }
 
@@ -893,27 +893,27 @@ void FlexPlugins::PeakFinder::analyze(const SCPolarBuf *buf) {
     if (m_queueL && m_maxSize > m_radius * 2 + 1) {
         m_size = 0;  // clear any existing data
         
-        size_t xxi = m_radius;
-        while (xxi < m_maxSize - m_radius) {
+        size_t i = m_radius;
+        while (i < m_maxSize - m_radius) {
             bool isMax = true;
-            for (size_t xxj = xxi - m_radius; xxj < xxi; xxj++) {
-                if (buf->bin[xxj].mag >= buf->bin[xxi].mag) {
+            for (size_t j = i - m_radius; j < i; j++) {
+                if (buf->bin[j].mag >= buf->bin[i].mag) {
                     isMax = false;
                     break;
                 }
             }
-            for (size_t xxj = xxi + 1; xxj <= xxi + m_radius; xxj++) {
-                if (buf->bin[xxj].mag >= buf->bin[xxi].mag) {
+            for (size_t j = i + 1; j <= i + m_radius; j++) {
+                if (buf->bin[j].mag >= buf->bin[i].mag) {
                     isMax = false;
                     break;
                 }
             }
             if (isMax) {
-                peaks[m_size] = Peak(xxi);
+                peaks[m_size] = Peak(i);
                 m_size++;
-                xxi += m_radius + 1;
+                i += m_radius + 1;
             } else {
-                xxi++;
+                i++;
             }
         }
 
@@ -922,21 +922,21 @@ void FlexPlugins::PeakFinder::analyze(const SCPolarBuf *buf) {
         if (m_size > 0) {
             float min = buf->bin[0].mag;
             size_t argmin = 0;
-            size_t xxk = 1;
-            for (; xxk < peaks[0].peak; xxk++) {
-                if (buf->bin[xxk].mag < min) {
-                    min = buf->bin[xxk].mag;
-                    argmin = xxk;
+            size_t k = 1;
+            for (; k < peaks[0].peak; k++) {
+                if (buf->bin[k].mag < min) {
+                    min = buf->bin[k].mag;
+                    argmin = k;
                 }
             }
             peaks[0].leftValley = argmin;
-            xxk = peaks[m_size-1].peak + 1;
-            min = buf->bin[xxk].mag;
-            argmin = xxk;
-            for (xxk++; xxk < m_maxSize; xxk++) {
-                if (buf->bin[xxk].mag < min) {
-                    min = buf->bin[xxk].mag;
-                    argmin = xxk;
+            k = peaks[m_size-1].peak + 1;
+            min = buf->bin[k].mag;
+            argmin = k;
+            for (k++; k < m_maxSize; k++) {
+                if (buf->bin[k].mag < min) {
+                    min = buf->bin[k].mag;
+                    argmin = k;
                 }
             }
             peaks[m_size-1].rightValley = argmin;
@@ -944,18 +944,18 @@ void FlexPlugins::PeakFinder::analyze(const SCPolarBuf *buf) {
         
         // Find the remaining left and right valleys
         if (m_size > 1) {
-            for (size_t xxj = 0; xxj < m_size-1; xxj++) {                
-                size_t xxk = peaks[xxj].peak + 1;
-                float min = buf->bin[xxk].mag;
-                size_t argmin = xxk;
-                for (xxk++; xxk < peaks[xxj+1].peak; xxk++) {
-                    if (buf->bin[xxk].mag < min) {
-                        min = buf->bin[xxk].mag;
-                        argmin = xxk;
+            for (size_t j = 0; j < m_size-1; j++) {                
+                size_t k = peaks[j].peak + 1;
+                float min = buf->bin[k].mag;
+                size_t argmin = k;
+                for (k++; k < peaks[j+1].peak; k++) {
+                    if (buf->bin[k].mag < min) {
+                        min = buf->bin[k].mag;
+                        argmin = k;
                     }
                 }
-                peaks[xxj].rightValley = argmin - 1;
-                peaks[xxj+1].leftValley = argmin;
+                peaks[j].rightValley = argmin - 1;
+                peaks[j+1].leftValley = argmin;
             }
         }
     }

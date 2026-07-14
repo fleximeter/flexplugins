@@ -4,10 +4,18 @@ related:: Classes/Convolution3, Classes/FOS, Classes/SOS, Classes/OneZero
 categories::  Libraries>FlexUGens, UGens>Filters>Linear
 
 Description::
-A no-nonsense FIR filter where you provide your own coefficients. FIR duplicates the functionality 
+A flexible time-domain FIR filter where you provide your own coefficients. FIR duplicates the functionality 
 of link::Classes/Convolution3::. The difference is that FIR does not require you to load your 
 filter coefficients into a link::Classes/Buffer::. Instead, you can provide them directly as a 
 link::Classes/Ref:: in the same way as is done in link::Classes/DynKlank::.
+
+FIR internally limits the number of coefficients to 32. This is because time-domain convolution only makes sense for 
+very short impulse responses--Frank Wefers writes that "the
+theoretical break-even point where FFT-based convolution becomes
+faster is between 16-32 samples."footnote::Frank Wefers, "Partitioned convolution algorithms
+for real-time auralization," Logos Verlag Berlin (2015), 224.:: One potential use of this UGen is 
+to perform Savitsky-Golay filtering for control signal smoothing 
+(see link::https://en.wikipedia.org/wiki/Savitzky%E2%80%93Golay_filter:: for coefficient tables).
 
 classmethods::
 
@@ -15,7 +23,7 @@ method::ar
 
 argument::coefs
 A link::Classes/Ref:: to a list of FIR filter coefficients. The number of coefficients can change 
-over time, but can never exceed the server block size (if it does, extra coefficients will be truncated).
+over time, but can never exceed 32 (if it does, extra coefficients will be truncated).
 
 argument::in
 The input signal to filter

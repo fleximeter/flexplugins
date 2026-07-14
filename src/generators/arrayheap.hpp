@@ -25,18 +25,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include <cstddef>
 
-/// A min heap for ints.
-typedef struct {
-    int* heap;
-    size_t size;
-    size_t maxSize;
-} IntMinHeap;
+namespace FlexPlugins {
+    /// A min heap for ints.
+    typedef struct {
+        int* heap;
+        size_t size;
+        size_t maxSize;
+    } IntMinHeap;
 
-/// Inserts into the heap
-int heapInsert(IntMinHeap* heap, int data);
+    /// Inserts into the heap
+    int heapInsert(IntMinHeap* heap, int data);
 
-/// Removes from the heap and returns the value popped. Returns 0 if the heap is empty.
-int heapPop(IntMinHeap* heap);
+    /// Removes from the heap and returns the value popped. Returns 0 if the heap is empty.
+    int heapPop(IntMinHeap* heap);
 
-/// Safe peek at the top of the heap
-int heapPeek(IntMinHeap* heap);
+    /// Safe peek at the top of the heap
+    int heapPeek(IntMinHeap* heap);
+}

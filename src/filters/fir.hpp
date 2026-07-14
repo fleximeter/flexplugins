@@ -3,7 +3,7 @@ File: fir.hpp
 Author: Jeff Martin
 
 Description:
-A raw FIR filter
+A flexible FIR filter
 
 Copyright © 2026 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com
@@ -25,6 +25,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
 #include "SC_PlugIn.hpp"
+
+#define MAX_COEFS 32
 
 namespace FlexPlugins {
     class FIR : public SCUnit {

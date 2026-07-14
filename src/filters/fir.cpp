@@ -3,7 +3,7 @@ File: fir.cpp
 Author: Jeff Martin
 
 Description:
-A raw FIR filter
+A flexible FIR filter
 
 Copyright © 2026 by Jeffrey Martin. All rights reserved.
 Website: https://www.jeffreymartincomposer.com
@@ -26,8 +26,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 extern InterfaceTable *ft;
 
 FlexPlugins::FIR::FIR() {
-    m_z = static_cast<float*>(RTAlloc(mWorld, fullBufferSize() * sizeof(float)));
-    for (size_t i = 0; i < fullBufferSize(); i++) {
+    m_z = static_cast<float*>(RTAlloc(mWorld, MAX_COEFS * sizeof(float)));
+    for (size_t i = 0; i < MAX_COEFS; i++) {
         m_z[i] = 0.f;
     }
     set_calc_function<FIR, &FIR::next>();
@@ -40,13 +40,13 @@ FlexPlugins::FIR::~FIR() {
 
 void FlexPlugins::FIR::next(int inNumSamples) {
     size_t numCoefs = static_cast<size_t>(mNumInputs - 1);
-    numCoefs = sc_clip(numCoefs, 0, static_cast<size_t>(fullBufferSize()));
+    numCoefs = sc_clip(numCoefs, 0, static_cast<size_t>(MAX_COEFS));
     const float *inBuf = in(0);
     float *outBuf = out(0);
     for (size_t i = 0; i < inNumSamples; i++) {
         float convResult = 0.f;
         // unit delay
-        for (size_t j = fullBufferSize() - 1; j > 0; j--) {
+        for (size_t j = MAX_COEFS - 1; j > 0; j--) {
             m_z[j] = m_z[j-1];
         }
         m_z[0] = inBuf[i];
