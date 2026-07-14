@@ -19,7 +19,7 @@ to perform Savitsky-Golay filtering for control signal smoothing
 
 classmethods::
 
-method::ar
+method::ar, kr
 
 argument::coefs
 A link::Classes/Ref:: to a list of FIR filter coefficients. The number of coefficients can change 
