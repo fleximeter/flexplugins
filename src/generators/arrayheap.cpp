@@ -25,7 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "arrayheap.hpp"
 
 // Inserts into the heap
-int heapInsert(IntMinHeap* heap, int data) {
+int FlexPlugins::heapInsert(IntMinHeap* heap, int data) {
     if (heap->size == heap->maxSize) {
         return 0;
     } else {
@@ -54,7 +54,7 @@ int heapInsert(IntMinHeap* heap, int data) {
 }
 
 // Removes from the heap and returns the value popped. Returns 0 if the heap is empty.
-int heapPop(IntMinHeap* heap) {
+int FlexPlugins::heapPop(IntMinHeap* heap) {
     if (heap->size > 1) {
         int val = heap->heap[1];
         heap->heap[1] = heap->heap[heap->size-1];
@@ -97,7 +97,7 @@ int heapPop(IntMinHeap* heap) {
 }
 
 // Safe peek at the top of the heap
-int heapPeek(IntMinHeap* heap) {
+int FlexPlugins::heapPeek(IntMinHeap* heap) {
     if (heap->size > 1) {
         return heap->heap[1];
     } else {

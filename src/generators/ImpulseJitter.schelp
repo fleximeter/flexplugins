@@ -32,17 +32,19 @@ This value will be added to the output.
 
 Examples::
 
+Generating audio:
 code::
-(
-SynthDef(\jitter, {
-	arg freq, jitterFrac, amp;
-    var sig;
-	sig = ImpulseJitter.ar(freq, 0.0, jitterFrac, amp);
-    sig = LPF.ar(sig, freq);
-    sig = LeakDC.ar(sig);
-	Out.ar(0, sig);
-}).add;
+{
+	var sig;
+	sig = ImpulseJitter.ar(440, 0, XLine.kr(1, 2, 5)-1);
+	Pan2.ar(sig);
+}.play;
+::
 
-Synth(\jitter, [\freq, 440.0, \jitterFrac, 0.1, \amp, -12.dbamp]);
-)
+An increasingly noisy impulse train as a control signal:
+code::
+{
+	var sig;
+	sig = ImpulseJitter.kr(10, 0, XLine.kr(1, 2, 2) - 1);
+}.plot(2);
 ::

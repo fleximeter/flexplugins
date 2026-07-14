@@ -28,6 +28,9 @@ A phase vocoder pitch shifter and time stretcher using the [RubberBand library](
 ### RubberBandStretcherBuf
 A phase vocoder pitch shifter and time stretcher using the [RubberBand library](https://breakfastquay.com/rubberband/). This version writes the stretched audio to a buffer rather than outputting it directly.
 
+### FIR
+A flexible FIR filter that allows you to provide an arbitrary number of coefficients directly (as opposed to loading them in a buffer with Convolution3).
+
 ### ImpulseDropout
 A modified version of Impulse that randomly drops a percentage of impulses, producing a stuttering effect.
 
