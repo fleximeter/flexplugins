@@ -47,9 +47,10 @@ result in time shrink. Negative rates result in backwards playback.
 argument::loop
 Whether (1.0) or not (0.0) to loop when the end of the stftBuffer is reached
 
-argument::phaseLock
-The phase locking strategy to adopt. 0.0 means no phase locking, 1.0 means Puckette-style 
-phase locking, and 2.0 means Laroche/Dolson identity phase locking.
+argument::mode
+The phase vocoder mode to adopt. 0 - classical phase vocoder, 1 - Puckette-style 
+phase locking, 2 - Laroche/Dolson identity phase locking, 3 - RTPGHI phase gradient algorithm. 
+The default is 3.
 
 argument::peakRadius
 The radius for the peak-picker in the Laroche/Dolson identity phase locking 

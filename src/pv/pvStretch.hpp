@@ -24,62 +24,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include "SC_PlugIn.hpp"
 #include "FFT_UGens.h"
+#include "peakFinder.hpp"
+#include "hashtable.hpp"
+#include "pqueue.hpp"
+#include "utilities.hpp"
 
 namespace FlexPlugins {
-    class Peak {
-    public:
-        Peak(size_t peak);
-        Peak(size_t peak, size_t leftValley, size_t rightValley);
-        size_t peak, leftValley, rightValley;
-    };
-
-    class PeakFinder {
-    public:
-        /// Constructs the PeakFinder
-        ///
-        /// \param fftSize The FFT size
-        PeakFinder(size_t fftSize, size_t radius);
-
-        /// Finds peaks in the provided SCPolarBuf. Note that this buffer must correspond
-        /// to the original FFT size provided for the PeakFinder--otherwise memory errors may occur.
-        ///
-        /// \param buf The buffer to analyze
-        void analyze(const SCPolarBuf *buf);
-
-        /// Loads memory from the external SuperCollider allocator. Memory is allocated
-        /// using RTAlloc() and the size is specified by the memSize() method.
-        ///
-        /// \param arr The allocated memory
-        void memLoad(void *arr);
-
-        /// Gets the memory size required for the PeakFinder
-        size_t memSize() const;
-
-        /// Gets the max size of the PeakFinder
-        ///
-        /// \returns The max size
-        size_t maxSize() const;
-
-        /// Gets the current size of the PeakFinder (the number of peaks stored)
-        ///
-        /// \returns The current size
-        size_t size() const;
-
-        /// Clears the PeakFinder
-        void clear();
-
-        /// Gets a pointer to the memory that was allocated for the PeakFinder
-        /// so that it can be deallocated
-        ///
-        /// \return The memory pointer
-        void* memRetrieve();
-
-        Peak *peaks;
-    private:
-        size_t m_maxSize, m_size, m_radius;
-        size_t *m_queueL, *m_queueR;
-    };
-
     /// Stores the state of a PV_PlayBufStretch UGen instance
     class PV_PlayBufStretch : public SCUnit {
     public:
@@ -239,6 +189,54 @@ namespace FlexPlugins {
         /// \param numbins The number of bins in the SCPolarBuf (fftSize/2-1)
         void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbins);
 
+        /// Computes the centered frequency gradient vector for a FFT frame
+        ///
+        /// \param currentFrame The current FFT frame in the STFT matrix
+        /// \param [out] freqGradient The output frequency gradient vector
+        /// \param fftSize The FFT size
+        /// \param signalLen The total length of the signal in samples
+        void cDiffFreq(
+            const SCPolarBuf *currentFrame, 
+            float *freqGradient, 
+            const size_t fftSize, 
+            const double signalLen
+        );
+
+        /// Computes the centered time phase gradient vector
+        ///
+        /// \param currentFrame The current FFT frame
+        /// \param prevFrame The previous FFT frame
+        /// \param nextFrame The next FFT frame
+        /// \param [out] timeGradient The output time gradient vector
+        /// \param fftSize The FFT size
+        /// \param hopSize The analysis hop size
+        void cDiffTime(
+            const SCPolarBuf *currentFrame, 
+            const SCPolarBuf *prevFrame, 
+            const SCPolarBuf *nextFrame, 
+            float *timeGradient, 
+            const size_t fftSize, 
+            const size_t hopSize
+        );
+
+        /// Linearly interpolates the magnitude of two STFT frames
+        /// 
+        /// \param prevFrame The previous STFT frame
+        /// \param nextFrame The next STFT frame
+        /// \param [out] out The output STFT frame
+        /// \param fftSize The FFT size
+        /// \param pos The position between the two frames (0 <= pos <= 1)
+        void magLinearInterp(const SCPolarBuf *prevFrame, const SCPolarBuf *nextFrame, SCPolarBuf *out, size_t fftSize, const double pos);
+        
+        /// Linearly interpolates the magnitude of two STFT frames using the power
+        /// 
+        /// \param prevFrame The previous STFT frame
+        /// \param nextFrame The next STFT frame
+        /// \param [out] out The output STFT frame
+        /// \param fftSize The FFT size
+        /// \param pos The position between the two frames (0 <= pos <= 1)
+        void powerLinearInterp(const SCPolarBuf *prevFrame, const SCPolarBuf *nextFrame, SCPolarBuf *out, size_t fftSize, const double pos);
+
         /// The index of the buffer with STFT data
         float m_fbufnum;
 
@@ -259,6 +257,17 @@ namespace FlexPlugins {
 
         /// The peak finding utility for the Laroche/Dolson stretching algorithm
         PeakFinder *m_peakFinder;
+
+        /// The frequency bin tracker for the RTPGHI algorithm
+        IntHashSet *m_setI;
+
+        /// The heap for the RTPGHI algorithm
+        MaxPQueue<float, std::pair<size_t, int>> *m_pgHeap;
+
+        /// Gradient vectors for the RTPGHI algorithm
+        float *m_freqGradient;
+        float *m_cTimeGradient;
+        float *m_pTimeGradient;
 
         /// Between 0 and 1; represents the start position of playback.
         /// If it jumps during playback, playback will be restarted
