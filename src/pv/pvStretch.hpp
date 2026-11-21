@@ -39,7 +39,7 @@ namespace FlexPlugins {
     private:
         void next(int inNumSamples);
 
-        /// Computes a single frame of STFT data for time stretching.
+        /// Computes a single frame of STFT phases for time stretching.
         /// The assumption is that we are positioned exactly at `frame`, and we therefore
         /// just need framePrev to compute the instantaneous frequency. We also do not
         /// need to perform any magnitude or frequency interpolation.
@@ -58,7 +58,7 @@ namespace FlexPlugins {
             size_t fftSize, 
             size_t hopSize);
 
-        /// Computes a single frame of STFT data for time stretching.
+        /// Computes a single frame of STFT phases for time stretching.
         /// The assumption is that we are positioned exactly at `frame`, and we therefore
         /// just need framePrev to compute the instantaneous frequency. We also do not
         /// need to perform any magnitude or frequency interpolation.
@@ -79,7 +79,7 @@ namespace FlexPlugins {
             size_t fftSize, 
             size_t hopSize);
 
-        /// Computes a single frame of STFT data for time stretching,
+        /// Computes a single frame of STFT phases for time stretching,
         /// using the Laroche/Dolson identity phase locking scheme.
         /// The assumption is that we are positioned exactly at `frame`, and we therefore
         /// just need framePrev to compute the instantaneous frequency. We also do not
@@ -101,7 +101,7 @@ namespace FlexPlugins {
             size_t fftSize, 
             size_t hopSize);
 
-        /// Computes a single frame of STFT data for time stretching.
+        /// Computes a single frame of STFT phases for time stretching.
         /// The assumption is that we are positioned between framePrev1 and frameNext.
         /// This means we will need to interpolate frequency data. So we will need to
         /// compute two frequencies for each bin, and that means we need three STFT frames.
@@ -124,7 +124,7 @@ namespace FlexPlugins {
             size_t fftSize, 
             size_t hopSize);
 
-        /// Computes a single frame of STFT data for time stretching.
+        /// Computes a single frame of STFT phases for time stretching.
         /// The assumption is that we are positioned between framePrev1 and frameNext.
         /// This means we will need to interpolate frequency data. So we will need to
         /// compute two frequencies for each bin, and that means we need three STFT frames.
@@ -149,7 +149,7 @@ namespace FlexPlugins {
             size_t fftSize, 
             size_t hopSize);
 
-        /// Computes a single frame of STFT data for time stretching,
+        /// Computes a single frame of STFT phases for time stretching,
         /// using the Laroche/Dolson identity phase locking scheme.
         /// The assumption is that we are positioned exactly at `frame`, and we therefore
         /// just need framePrev to compute the instantaneous frequency. We also do not
@@ -236,6 +236,40 @@ namespace FlexPlugins {
         /// \param fftSize The FFT size
         /// \param pos The position between the two frames (0 <= pos <= 1)
         void powerLinearInterp(const SCPolarBuf *prevFrame, const SCPolarBuf *nextFrame, SCPolarBuf *out, size_t fftSize, const double pos);
+
+        /// Computes a single frame of STFT phases for time stretching, 
+        /// using the RTPGHI algorithm.
+        ///
+        /// \param currentFrame The current STFT frame
+        /// \param prevFrame The previous STFT frame
+        /// \param cTimeDiff The current time gradient vector
+        /// \param pTimeDiff The previous time gradient vector
+        /// \param cFreqDiff The current frequency gradient vector
+        /// \param [out] outFrame The frame to write output STFT data to
+        /// \param outFramePrev The previous output frame
+        /// \param alpha The stretch factor
+        /// \param tol The magnitude tolerance for phase calculation (0 < tol < 1)
+        /// \param fftSize The FFT size
+        /// \param hopSize The hop size
+        /// \param signalLen The signal length
+        /// \param pgHeap The phase gradient heap
+        /// \param setI The bin tracker 
+        void Stretch2_RTPGHI(
+            const SCPolarBuf *currentFrame, 
+            const SCPolarBuf *prevFrame, 
+            const float *cTimeDiff, 
+            const float *pTimeDiff,
+            const float *cFreqDiff, 
+            SCPolarBuf *outFrame, 
+            const SCPolarBuf *outFramePrev, 
+            const float alpha,
+            const double tol, 
+            const size_t fftSize, 
+            const size_t hopSize,
+            const double signalLen,
+            MaxPQueue<float, std::pair<size_t, int>> *pgHeap,
+            IntHashSet *setI
+        );
 
         /// The index of the buffer with STFT data
         float m_fbufnum;
