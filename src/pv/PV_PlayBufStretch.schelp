@@ -7,19 +7,22 @@ related:: Guides/FFT-Overview
 Description::
 
 PV_PlayBufStretch is a phase vocoder buffer player for time stretching. It differs from link::Classes/PV_BufRd:: 
-in that it has a phase locking feature. Phase locking is a strategy that is used to reduce 
-"phasiness"--a reverberant sound caused by phase misalignment in adjacent bins. 
-The idea is that you want the phases of peak bins to dominate the phases of adjacent bins. 
-This makes sense intuitively because we know that in an FFT, the energy of a partial is spread 
-across several bins. PV_PlayBufStretch implements two classic phase locking algorithms--an 
-algorithm by Miller Puckette,footnote::Puckette, Miller. "Phase-locked vocoder." 1995 IEEE Workshop on Applications of Signal Processing to Audio and Acoustics (1995), 222-225.:: 
-and a later peak-picking algorithm (called "identity phase locking") 
-by Jean Laroche and Mark Dolson.footnote::Laroche, Jean, and Mark Dolson. "Improved Phase Vocoder Time-Scale Modification of Audio." IEEE Transactions on Speech and Audio Processing, 7, no. 3 (1999), 323-332.::
+in that it has four different phase interpolation modes:
 
-You will want to choose the algorithm based on the sound it produces. In some cases, you may not 
-wish to use phase locking at all. Traditionally, one would use a hop size of 0.25 or less along with an 
-appropriate window (like the Hann window) in the STFT. Laroche and Dolson write that for identity 
-phase locking, a hop size of 0.5 is feasible.
+list::
+## Mode 0 is the classical phase vocoder.
+## Mode 1 is a simple phase locking strategy devised by Miller Puckette footnote::Puckette, Miller. "Phase-locked vocoder." 1995 IEEE Workshop on Applications of Signal Processing to Audio and Acoustics (1995), 222-225.::.
+## Mode 2 is a peak-picking phase locking strategy by Jean Laroche and Mark Dolson footnote::Laroche, Jean, and Mark Dolson. "Improved Phase Vocoder Time-Scale Modification of Audio." IEEE Transactions on Speech and Audio Processing, 7, no. 3 (1999), 323-332.::.
+## Mode 3 is the real-time phase gradient heap integration (RTPGHI) algorithm by Zdeněk Průša and Nicki Holighaus footnote::Průša, Zdeněk  and Nicki Holighaus. "Phase Vocoder Done Right."::.
+::
+
+In the classical phase vocoder, the phases of adjacent bins slowly drift out of alignment. 
+This causes a reverberant sound effect called "phasiness." Modes 1-3 of PV_PlayBufStretch 
+attempt to alleviate this problem by synchronizing the phases of adjacent bins to some extent.
+
+You will want to choose the algorithm based on the sound it produces. 
+Traditionally, one would use a hop size of 0.25 or less along with an 
+appropriate window (like the Hann window) in the STFT.
 
 classmethods::
 
