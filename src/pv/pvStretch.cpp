@@ -57,9 +57,11 @@ FlexPlugins::PV_PlayBufStretch::PV_PlayBufStretch() {
 
     // Set up the hash set and heap for the RTPGHI algorithm
     m_setI = static_cast<IntHashSet*>(RTAlloc(mWorld, sizeof(IntHashSet)));
-    m_setI->memLoad(RTAlloc(mWorld, m_setI->memSize(static_cast<size_t>(fftSize * 2))), m_setI->memSize(static_cast<size_t>(fftSize * 2)));
-    m_pgHeap = static_cast<MaxPQueue<float, std::pair<size_t, int>>*>(RTAlloc(mWorld, sizeof(MaxPQueue<float, std::pair<size_t, int>>*)));
-    m_pgHeap->memLoad(RTAlloc(mWorld, m_pgHeap->memSize(static_cast<size_t>(fftSize * 2))), m_pgHeap->memSize(static_cast<size_t>(fftSize * 2)));
+    new (m_setI) IntHashSet(0.7);
+    m_setI->memLoad(RTAlloc(mWorld, m_setI->memSize(fftSize * 2)), m_setI->memSize(fftSize * 2));
+    m_pgHeap = static_cast<MaxPQueue<float, std::pair<size_t, int>>*>(RTAlloc(mWorld, sizeof(MaxPQueue<float, std::pair<size_t, int>>)));
+    new (m_pgHeap) MaxPQueue<float, std::pair<size_t, int>>();
+    m_pgHeap->memLoad(RTAlloc(mWorld, m_pgHeap->memSize(fftSize * 4)), m_pgHeap->memSize(fftSize * 4));
 
     // Set up the time and frequency gradient vectors
     m_cTimeGradient = static_cast<float*>(RTAlloc(mWorld, sizeof(float) * numScBins));
@@ -82,7 +84,6 @@ FlexPlugins::PV_PlayBufStretch::PV_PlayBufStretch() {
 }
 
 FlexPlugins::PV_PlayBufStretch::~PV_PlayBufStretch() {
-    Print("Destructor running\n...");
     if (m_peakFinder) {
         void *reservedMem = m_peakFinder->memRetrieve();
         if (reservedMem) {
@@ -90,7 +91,6 @@ FlexPlugins::PV_PlayBufStretch::~PV_PlayBufStretch() {
         }
         RTFree(mWorld, m_peakFinder);
     }
-    Print("Peak finder destroyed\n...");
     if (m_setI) {
         void *reservedMem = m_setI->memRetrieve();
         if (reservedMem) {
@@ -98,43 +98,34 @@ FlexPlugins::PV_PlayBufStretch::~PV_PlayBufStretch() {
         }
         RTFree(mWorld, m_setI);
     }
-    Print("Set I destroyed\n...");
     if (m_pgHeap) {
         void *reservedMem = m_pgHeap->memRetrieve();
         if (reservedMem) {
             RTFree(mWorld, reservedMem);
         }
-        RTFree(mWorld, reservedMem);
+        RTFree(mWorld, m_pgHeap);
     }
-    Print("PgHeap destroyed\n...");
     if (m_outFramePrev) {
         RTFree(mWorld, m_outFramePrev);
     }
-    Print("Outp destroyed\n...");
     if (m_frameNext) {
         RTFree(mWorld, m_frameNext);
     }
-    Print("Next destroyed\n...");
     if (m_framePrev1) {
         RTFree(mWorld, m_framePrev1);
     }
-    Print("P1 destroyed\n...");
     if (m_framePrev2) {
         RTFree(mWorld, m_framePrev2);
     }
-    Print("P2 destroyed\n...");
     if (m_cTimeGradient) {
         RTFree(mWorld, m_cTimeGradient);
     }
-    Print("CG destroyed\n...");
     if (m_pTimeGradient) {
         RTFree(mWorld, m_pTimeGradient);
     }
-    Print("PG destroyed\n...");
     if (m_freqGradient) {
         RTFree(mWorld, m_freqGradient);
     }
-    Print("FG destroyed\n...");
 }
 
 void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
@@ -274,7 +265,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
     else {
         size_t phaseLock = sc_clip(static_cast<size_t>(in0(5)), 0, 3);
         SCPolarBuf *p = ToPolarApx(buf);
-        size_t roundedPos = static_cast<size_t>(std::round(newPos));
+        int roundedPos = static_cast<int>(std::round(newPos));
     
         // For traditional phase vocoder methods
         if (phaseLock < 3) {
@@ -392,62 +383,62 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
         // RTPGHI algorithm
         else {
             // Determine position between two adjacent STFT frames
-            size_t lo, hi, loprev;
-            SCPolarBuf *currentFrame, *nextFrame, *prevFrame;
+            size_t lo, hi;
+            float posFrac;
 
-            if (rate >= 0) {                
-                lo = static_cast<size_t>(std::floor(newPos));
-                hi = static_cast<size_t>(std::ceil(newPos));
-                loprev = lo == 0 ? 0 : lo - 1;
-                currentFrame = m_framePrev1;
-                fillPolarBuf(stftData + (roundedPos * stftBufFftSize), m_framePrev1, stftBufFftSize);
-                if (roundedPos + 1 <= stftFrames) {
-                    nextFrame = m_frameNext;
-                    fillPolarBuf(stftData + ((roundedPos+1) * stftBufFftSize), m_frameNext, stftBufFftSize);
-                } else {
-                    nextFrame = nullptr;
-                }
-                if (roundedPos - 1 >= 0) {
-                    prevFrame = m_framePrev2;
-                    fillPolarBuf(stftData + ((roundedPos+1) * stftBufFftSize), m_framePrev2, stftBufFftSize);
-                } else {
-                    prevFrame = nullptr;
-                }
+            // Determine current, previous, and next indices
+            size_t currIdx, prevIdx, nextIdx;
+
+            // Need to alias the buffers so their names make logical sense
+            SCPolarBuf *currentFrame = m_framePrev1;
+            SCPolarBuf *nextFrame = m_frameNext;
+            SCPolarBuf *prevFrame = m_framePrev2;
+
+            if (rate >= 0) {
+                currIdx = static_cast<size_t>(sc_clip(roundedPos, 0, stftFrames-1));
+                prevIdx = static_cast<size_t>(sc_clip(roundedPos-1, 0, stftFrames-1));
+                nextIdx = static_cast<size_t>(sc_clip(roundedPos+1, 0, stftFrames-1));
+                lo = static_cast<size_t>(sc_clip(std::floor(newPos), 0, stftFrames-1));
+                hi = static_cast<size_t>(sc_clip(std::ceil(newPos), 0, stftFrames-1));
+                posFrac = newPos - static_cast<float>(lo);
             } else {
-                hi = static_cast<size_t>(std::floor(newPos));
-                lo = static_cast<size_t>(std::ceil(newPos));
-                loprev = lo + 1;
-                if (loprev >= stftFrames) loprev = lo;
-                currentFrame = m_framePrev1;
-                fillPolarBuf(stftData + (roundedPos * stftBufFftSize), m_framePrev1, stftBufFftSize);
-                if (roundedPos + 1 <= stftFrames) {
-                    prevFrame = m_framePrev2;
-                    fillPolarBuf(stftData + ((roundedPos+1) * stftBufFftSize), m_framePrev2, stftBufFftSize);
-                } else {
-                    prevFrame = nullptr;
-                }
-                if (roundedPos - 1 >= 0) {
-                    nextFrame = m_frameNext;
-                    fillPolarBuf(stftData + ((roundedPos+1) * stftBufFftSize), m_frameNext, stftBufFftSize);
-                } else {
-                    nextFrame = nullptr;
-                }
+                currIdx = static_cast<size_t>(sc_clip(roundedPos, 0, stftFrames-1));
+                prevIdx = static_cast<size_t>(sc_clip(roundedPos+1, 0, stftFrames-1));
+                nextIdx = static_cast<size_t>(sc_clip(roundedPos-1, 0, stftFrames-1));
+                hi = static_cast<size_t>(sc_clip(std::floor(newPos), 0, stftFrames-1));
+                lo = static_cast<size_t>(sc_clip(std::ceil(newPos), 0, stftFrames-1));
+                posFrac = newPos - static_cast<float>(hi);
             }
 
+            fillPolarBuf(stftData + (currIdx * stftBufFftSize), currentFrame, stftBufFftSize);
+            fillPolarBuf(stftData + (prevIdx * stftBufFftSize), prevFrame, stftBufFftSize);
+            fillPolarBuf(stftData + (nextIdx * stftBufFftSize), nextFrame, stftBufFftSize);
+
+            // Update the previous time gradient
             size_t numScBins = stftBufFftSize/2-1;
             for (size_t k = 0; k < numScBins; k++) {
                 m_pTimeGradient[k] = m_cTimeGradient[k];
             }
 
-            cDiffTime(currentFrame, prevFrame, nextFrame, m_cTimeGradient, stftBufFftSize, stftBufHopSize);
+            // Compute the current gradients
+            if (currIdx == prevIdx) {
+                cDiffTime(currentFrame, nullptr, nextFrame, m_cTimeGradient, stftBufFftSize, stftBufHopSize);
+            } else if (currIdx == nextIdx) {
+                cDiffTime(currentFrame, prevFrame, nullptr, m_cTimeGradient, stftBufFftSize, stftBufHopSize);
+            } else {
+                cDiffTime(currentFrame, prevFrame, nextFrame, m_cTimeGradient, stftBufFftSize, stftBufHopSize);
+            }
             cDiffFreq(currentFrame, m_freqGradient, stftBufFftSize, static_cast<double>(stftBufNumOrigAudioFrames));
-            double tol = sc_clip(static_cast<double>(in0(7)), 1e-20, 1 - 1e-20);
+
+            const double tol = sc_clip(static_cast<double>(in0(7)), 1e-20, 1 - 1e-20);
             Stretch2_RTPGHI(currentFrame, prevFrame, m_cTimeGradient, m_pTimeGradient, m_freqGradient, p, m_outFramePrev, static_cast<double>(rate), tol, stftBufFftSize, stftBufHopSize, static_cast<double>(stftBufNumOrigAudioFrames), m_pgHeap, m_setI);
-            
             if (std::abs(roundedPos-newPos) < 1e-3) {
                 powerLinearInterp(currentFrame, nullptr, p, stftBufFftSize, 1);
-            } else {
-                powerLinearInterp(prevFrame, currentFrame, p, stftBufFftSize, newPos-static_cast<float>(lo));
+            } else if (currIdx == lo) {
+                powerLinearInterp(currentFrame, nextFrame, p, stftBufFftSize, posFrac);
+            }
+            else {
+                powerLinearInterp(prevFrame, currentFrame, p, stftBufFftSize, posFrac);
             }
         }
 
@@ -459,6 +450,28 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
     }
 
     RELEASE_SNDBUF_SHARED(stftBuf);
+}
+
+struct FrameIndices {
+    FrameIndices() : prevFrame1(0), prevFrame2(0), currentFrame(0), nextFrame(0) {}
+    size_t prevFrame2, prevFrame1, currentFrame, nextFrame;
+};
+
+FrameIndices getFrameIndices(const float pos, const size_t numStftFrames, const float rate) {
+    FrameIndices indices;
+    int roundedPos = static_cast<int>(std::round(pos));
+    if (rate >= 0) {
+        indices.currentFrame = static_cast<size_t>(sc_clip(roundedPos, 0, numStftFrames-1));
+        indices.prevFrame1 = static_cast<size_t>(sc_clip(roundedPos-1, 0, numStftFrames-1));
+        indices.prevFrame2 = static_cast<size_t>(sc_clip(roundedPos-2, 0, numStftFrames-1));
+        indices.nextFrame = static_cast<size_t>(sc_clip(roundedPos+1, 0, numStftFrames-1));
+    } else {
+        indices.currentFrame = static_cast<size_t>(sc_clip(roundedPos, 0, numStftFrames-1));
+        indices.prevFrame1 = static_cast<size_t>(sc_clip(roundedPos+1, 0, numStftFrames-1));
+        indices.prevFrame2 = static_cast<size_t>(sc_clip(roundedPos+2, 0, numStftFrames-1));
+        indices.nextFrame = static_cast<size_t>(sc_clip(roundedPos-1, 0, numStftFrames-1));
+    }
+    return indices;
 }
 
 /// Computes a single frame of STFT phases for time stretching.
@@ -1112,10 +1125,12 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2_RTPGHI(
     MaxPQueue<float, std::pair<size_t, int>> *pgHeap,
     IntHashSet *setI
 ) {
-    // load RNG here!!
-    size_t numScBins = fftSize/2-1;
+    RGen* rgen = mParent->mRGen;
+    uint32 s1 = rgen->s1;                                                                                               \
+    uint32 s2 = rgen->s2;                                                                                               \
+    uint32 s3 = rgen->s3;
 
-    pgHeap->clear();
+    size_t numScBins = fftSize/2-1;
 
     // 1--compute abstol
     double abstol = 0.0;
@@ -1138,11 +1153,15 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2_RTPGHI(
     for (size_t k = 0; k < numScBins; k++) {
         if (prevFrame->bin[k].mag > abstol) {
             setI->insert(k);
-            pgHeap->insert(prevFrame->bin[k].mag, {k, -1});
+            //pgHeap->insert(prevFrame->bin[k].mag, {k, -1});
         } else {
-            outFrame->bin[k].mag = currentFrame->bin[k].mag;
-            // replace RNG call here!
-            outFrame->bin[k].phase = (static_cast<double>(rand()) / static_cast<double>(RAND_MAX)) * twopi;
+            outFrame->bin[k].phase = rgen->frand() * twopi;
+        }
+    }
+    
+    for (size_t k = 0; k < numScBins; k++) {
+        if (prevFrame->bin[k].mag > abstol) {
+            pgHeap->insert(prevFrame->bin[k].mag, {k, -1});
         }
     }
 

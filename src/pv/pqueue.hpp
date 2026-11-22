@@ -130,19 +130,19 @@ namespace FlexPlugins {
 
 template <typename K, typename V>
 FlexPlugins::PQueue<K, V>::PQueue() {
-    m_maxSize = 0;
-    m_heap = nullptr;
-    m_size = 0;
+    this->m_maxSize = 0;
+    this->m_heap = nullptr;
+    this->m_size = 0;
 }
 
 template <typename K, typename V>
 void FlexPlugins::PQueue<K, V>::clear() {
-    m_size = 0;
+    this->m_size = 0;
 }
 
 template <typename K, typename V>
 size_t FlexPlugins::PQueue<K, V>::maxSize() const {
-    return m_maxSize - 1;
+    return this->m_maxSize - 1;
 }
 
 template <typename K, typename V>
@@ -152,19 +152,19 @@ size_t FlexPlugins::PQueue<K, V>::memSize(size_t queueSize) const {
 
 template <typename K, typename V>
 void FlexPlugins::PQueue<K, V>::memLoad(void* mem, size_t nbytes) {
-    m_heap = static_cast<std::pair<K, V>*>(mem);
-    m_maxSize = nbytes / sizeof(std::pair<K, V>);
+    this->m_heap = static_cast<std::pair<K, V>*>(mem);
+    this->m_maxSize = nbytes / sizeof(std::pair<K, V>);
 }
 
 template <typename K, typename V>
 void* FlexPlugins::PQueue<K, V>::memRetrieve() {
-    return static_cast<void*>(m_heap);
+    return static_cast<void*>(this->m_heap);
 }
 
 template <typename K, typename V>
 std::pair<K, V> FlexPlugins::PQueue<K, V>::peek() const {
-    if (m_size > 1) {
-        return m_heap[1];
+    if (this->m_size > 1) {
+        return this->m_heap[1];
     } else {
         return 0;
     }
@@ -172,8 +172,8 @@ std::pair<K, V> FlexPlugins::PQueue<K, V>::peek() const {
 
 template <typename K, typename V>
 size_t FlexPlugins::PQueue<K, V>::size() const {
-    if (m_size > 0) {
-        return m_size - 1;
+    if (this->m_size > 0) {
+        return this->m_size - 1;
     } else {
         return 0;
     }
