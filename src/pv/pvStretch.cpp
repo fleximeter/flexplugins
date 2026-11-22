@@ -62,7 +62,7 @@ FlexPlugins::PV_PlayBufStretch::PV_PlayBufStretch() {
     m_setI->memLoad(RTAlloc(mWorld, m_setI->memSize(fftSize * 2)), m_setI->memSize(fftSize * 2));
     m_pgHeap = static_cast<MaxPQueue<float, std::pair<size_t, int>>*>(RTAlloc(mWorld, sizeof(MaxPQueue<float, std::pair<size_t, int>>)));
     new (m_pgHeap) MaxPQueue<float, std::pair<size_t, int>>();
-    m_pgHeap->memLoad(RTAlloc(mWorld, m_pgHeap->memSize(fftSize * 4)), m_pgHeap->memSize(fftSize * 4));
+    m_pgHeap->memLoad(RTAlloc(mWorld, m_pgHeap->memSize(fftSize)), m_pgHeap->memSize(fftSize));
 
     // Set up the time and frequency gradient vectors
     const size_t numScBins = fftSize/2-1;
@@ -1015,7 +1015,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
 /// \param fftBuf The FFT frame from the STFT buffer
 /// \param [out] polarBuf The SCPolarBuf to copy to
 /// \param fftSize The FFT size
-void fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, const size_t fftSize) {
+void FlexPlugins::fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, const size_t fftSize) {
     polarBuf->dc = fftBuf[0];
     polarBuf->nyq = fftBuf[1];
     for (size_t n = 2, k = 0; n < fftSize; n+=2, k++) {
@@ -1031,7 +1031,7 @@ void fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, const size_t fftSiz
 /// \param sourceBuf The source buffer
 /// \param [out] destBuf The destination buffer
 /// \param numbins The number of bins in the SCPolarBuf (fftSize/2-1)
-void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, const size_t numbins) {
+void FlexPlugins::copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, const size_t numbins) {
     destBuf->dc = sourceBuf->dc;
     destBuf->nyq = sourceBuf->nyq;
     for (size_t n = 0; n < numbins; n++) {
@@ -1046,7 +1046,7 @@ void copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, const size_t
 /// \param [out] freqGradient The output frequency gradient vector
 /// \param fftSize The FFT size
 /// \param signalLen The total length of the signal in samples
-void cDiffFreq(
+void FlexPlugins::cDiffFreq(
     const SCPolarBuf *currentFrame, 
     float *freqGradient, 
     const size_t fftSize, 
@@ -1075,7 +1075,7 @@ void cDiffFreq(
 /// \param [out] timeGradient The output time gradient vector
 /// \param fftSize The FFT size
 /// \param hopSize The analysis hop size
-void cDiffTime(
+void FlexPlugins::cDiffTime(
     const SCPolarBuf *currentFrame, 
     const SCPolarBuf *prevFrame, 
     const SCPolarBuf *nextFrame, 
@@ -1123,7 +1123,7 @@ void cDiffTime(
 /// \param [out] out The output STFT frame
 /// \param fftSize The FFT size
 /// \param pos The position between the two frames (0 <= pos <= 1)
-void magLinearInterp(
+void FlexPlugins::magLinearInterp(
     const SCPolarBuf *prevFrame, 
     const SCPolarBuf *nextFrame, 
     SCPolarBuf *out, 
@@ -1159,7 +1159,7 @@ void magLinearInterp(
 /// \param [out] out The output STFT frame
 /// \param fftSize The FFT size
 /// \param pos The position between the two frames (0 <= pos <= 1)
-void powerLinearInterp(
+void FlexPlugins::powerLinearInterp(
     const SCPolarBuf *prevFrame, 
     const SCPolarBuf *nextFrame, 
     SCPolarBuf *out, 
