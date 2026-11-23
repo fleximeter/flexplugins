@@ -444,7 +444,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
                 m_freqGradient, 
                 outFrame, 
                 m_outFramePrev, 
-                static_cast<double>(rate), 
+                sc_clip(1.0/static_cast<double>(rate), 1e-3, 1e3), 
                 tol, 
                 stftBufFftSize, 
                 stftBufHopSize, 
