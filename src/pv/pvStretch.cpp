@@ -690,8 +690,8 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2_RTPGHI(
     const double signalLen
 ) {
     RGen* rgen = mParent->mRGen;
-    uint32 s1 = rgen->s1;                                                                                               \
-    uint32 s2 = rgen->s2;                                                                                               \
+    uint32 s1 = rgen->s1;
+    uint32 s2 = rgen->s2;
     uint32 s3 = rgen->s3;
 
     size_t numScBins = fftSize/2-1;
