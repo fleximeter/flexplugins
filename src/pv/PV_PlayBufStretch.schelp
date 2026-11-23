@@ -93,13 +93,13 @@ SynthDef(\rec, {
 }).add;
 
 SynthDef(\play2, {
-	arg recBuf, rate=1, mode=0, loop=0, startPos=0;
+	arg recBuf, rate=1, mode=0, tol=0.1, loop=0, startPos=0;
 	var sig, chain;
 	// Note that you must specify the appropriate hop size in FFTTrigger.
 	// Also note that the FFT size must be the same as the FFT size of
 	// the original analysis.
 	chain = FFTTrigger(LocalBuf(2048), 0.25, 1.0);
-	chain = PV_PlayBufStretch(chain, recBuf, startPos, rate, loop, mode, 2.0, 0.1, Done.freeSelf);
+	chain = PV_PlayBufStretch(chain, recBuf, startPos, rate, loop, mode, 2.0, tol, Done.freeSelf);
 	// Use the same window type that was used for analysis.
 	sig = IFFT(chain, 1);
 	Out.ar(0, Pan2.ar(sig));
@@ -107,7 +107,7 @@ SynthDef(\play2, {
 )
 
 Synth(\rec, [\recBuf, y, \soundBuf, z]);
-b = Synth(\play2, [\recBuf, y, \rate, 0.5, \loop, 1.0, \startPos, 0.0, \mode, 2]);
+b = Synth(\play2, [\recBuf, y, \rate, 0.5, \loop, 1.0, \startPos, 0.0, \mode, 3, \tol, 0.1]);
 
 // A more unusual take. Here we modulate the playback rate, and it can go negative.
 (
