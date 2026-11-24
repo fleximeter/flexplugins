@@ -4,7 +4,7 @@ A collection of SuperCollider plugins developed by Jeff Martin (www.jeffreymarti
 ## List of Plugins
 
 ### PV_PlayBufStretch
-A phase vocoder STFT buffer player for time stretching, for use with PV_RecordBuf in the sc3plugins distribution. It incorporates two different optional phase locking algorithms.
+A phase vocoder STFT buffer player for time stretching, for use with PV_RecordBuf in the sc3plugins distribution. It has four different phase interpolation modes--the traditional method, two phase locking strategies, and the RTPGHI algorithm.
 
 ### PV_CFreeze
 A SuperCollider implementation of Jean-François Charles' Max patch for freezing [(the Max patch is available here)](https://newfloremusic.gumroad.com/).

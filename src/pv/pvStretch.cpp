@@ -23,10 +23,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "pvStretch.hpp"
+#include "FFT_UGens.h"
 #include "SC_Constants.h"
+#include "SC_InterfaceTable.h"
 #include <iostream>
 #include <complex>
-#define INTERP(a, b, pos) (a + (b-a) * pos)
 
 extern InterfaceTable *ft;
 
@@ -44,16 +45,39 @@ FlexPlugins::PV_PlayBufStretch::PV_PlayBufStretch() {
     m_frameNext = nullptr;
     m_framePrev1 = nullptr;
     m_framePrev2 = nullptr;
-    size_t peakRadius = static_cast<size_t>(sc_clip(in0(6), 1.f, 32.f));
-    m_peakFinder = (PeakFinder*)RTAlloc(mWorld, sizeof(PeakFinder));
-    new (m_peakFinder) PeakFinder(static_cast<size_t>(buf->samples), peakRadius);
-    m_peakFinder->memLoad(RTAlloc(mWorld, m_peakFinder->memSize()));
+    m_cTimeGradient = nullptr;
+    m_pTimeGradient = nullptr;
+    m_freqGradient = nullptr;
+
+    const size_t fftSize = static_cast<size_t>(buf->samples);
     
+    // Set up the Laroche/Dolson peak finder
+    m_peakFinder = static_cast<PeakFinder*>(RTAlloc(mWorld, sizeof(PeakFinder)));
+    new (m_peakFinder) PeakFinder(fftSize, static_cast<size_t>(sc_clip(in0(6), 1.f, 32.f)));
+    m_peakFinder->memLoad(RTAlloc(mWorld, m_peakFinder->memSize()));
+
+    // Set up the hash set and heap for the RTPGHI algorithm
+    m_setI = static_cast<IntHashSet*>(RTAlloc(mWorld, sizeof(IntHashSet)));
+    new (m_setI) IntHashSet(0.7);
+    m_setI->memLoad(RTAlloc(mWorld, m_setI->memSize(fftSize * 2)), m_setI->memSize(fftSize * 2));
+    m_pgHeap = static_cast<MaxPQueue<float, std::pair<size_t, int>>*>(RTAlloc(mWorld, sizeof(MaxPQueue<float, std::pair<size_t, int>>)));
+    new (m_pgHeap) MaxPQueue<float, std::pair<size_t, int>>();
+    m_pgHeap->memLoad(RTAlloc(mWorld, m_pgHeap->memSize(fftSize)), m_pgHeap->memSize(fftSize));
+
+    // Set up the time and frequency gradient vectors
+    const size_t numScBins = fftSize/2-1;
+    m_cTimeGradient = static_cast<float*>(RTAlloc(mWorld, sizeof(float) * numScBins));
+    m_pTimeGradient = static_cast<float*>(RTAlloc(mWorld, sizeof(float) * numScBins));
+    m_freqGradient = static_cast<float*>(RTAlloc(mWorld, sizeof(float) * numScBins));
+    for (size_t k = 0; k < numScBins; k++) {
+        m_cTimeGradient[k] = 0;
+        m_pTimeGradient[k] = 0;
+        m_freqGradient[k] = 0;
+    }
+
     // Configure position
-    float startPos = sc_clip<float>(in0(2), 0.0, 1.0);
-    m_pos = 0.f;
-    m_startPos = startPos;
-    m_firstFrame = true;
+    m_pos = 0.f; // the current position in the buffer
+    m_startPos = -1.f; // this forces the first frame to read phase data directly
 
     set_calc_function<PV_PlayBufStretch, &PV_PlayBufStretch::next>();
     next(1);
@@ -67,6 +91,20 @@ FlexPlugins::PV_PlayBufStretch::~PV_PlayBufStretch() {
         }
         RTFree(mWorld, m_peakFinder);
     }
+    if (m_setI) {
+        void *reservedMem = m_setI->memRetrieve();
+        if (reservedMem) {
+            RTFree(mWorld, reservedMem);
+        }
+        RTFree(mWorld, m_setI);
+    }
+    if (m_pgHeap) {
+        void *reservedMem = m_pgHeap->memRetrieve();
+        if (reservedMem) {
+            RTFree(mWorld, reservedMem);
+        }
+        RTFree(mWorld, m_pgHeap);
+    }
     if (m_outFramePrev) {
         RTFree(mWorld, m_outFramePrev);
     }
@@ -78,6 +116,15 @@ FlexPlugins::PV_PlayBufStretch::~PV_PlayBufStretch() {
     }
     if (m_framePrev2) {
         RTFree(mWorld, m_framePrev2);
+    }
+    if (m_cTimeGradient) {
+        RTFree(mWorld, m_cTimeGradient);
+    }
+    if (m_pTimeGradient) {
+        RTFree(mWorld, m_pTimeGradient);
+    }
+    if (m_freqGradient) {
+        RTFree(mWorld, m_freqGradient);
     }
 }
 
@@ -122,6 +169,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
     // Basic information
     const size_t stftBufFftSize = static_cast<size_t>(bufData[0]);
     const size_t stftBufHopSize = static_cast<size_t>(bufData[1] * stftBufFftSize);  // in frames, not fraction
+    const size_t stftBufNumOrigAudioFrames = (stftFrames - 1) * stftBufHopSize + stftBufFftSize;  // number of original audio samples for RTPGHI algorithm
     const int stftBufWinType = static_cast<int>(bufData[2]);  // -1, 0, or 1. This information is probably extraneous.
     
     if (stftBufFftSize != buf->samples) {
@@ -141,20 +189,24 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
         float *frameNext = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
         float *framePrev1 = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
         float *framePrev2 = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
+        // uggggghh
         m_outFramePrev = (SCPolarBuf*)outFramePrev;
         m_frameNext = (SCPolarBuf*)frameNext;
         m_framePrev1 = (SCPolarBuf*)framePrev1;
         m_framePrev2 = (SCPolarBuf*)framePrev2;
     }
     
-    float startPos = sc_clip<float>(in0(2), 0.0, 1.0);
+    float startPos = sc_clip(in0(2), 0.f, 1.f);
     const float rate = in0(3);
     const float loop = in0(4);
+
+    // If we're on the first frame, we'll just read phase data directly.
+    bool firstFrame = false;
     
+    // If the start position changed, we jump directly to the new start position.
     if (startPos != m_startPos) {
         m_startPos = startPos;
-        m_firstFrame = true;
-        // std::cout << "Start pos changed\n";
+        firstFrame = true;
     }
 
     // Now that we've run setup, we're ready to read STFT data and perform phase vocoder stretching.
@@ -163,7 +215,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
     float newPos = m_pos + rate;
     if (newPos > stftFrames - 1) {
         if (loop && rate > 0) {
-            m_firstFrame = true;
+            firstFrame = true;
             startPos = 0;
         } else if (rate <= 0) {
             // clip it to the last possible frame if we're working backwards
@@ -172,12 +224,12 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
             float *outBuf = out(0);
             outBuf[0] = -1.f;
             RELEASE_SNDBUF_SHARED(stftBuf);
-            DoneAction(static_cast<int>(in0(7)), this);
+            DoneAction(static_cast<int>(in0(8)), this);
             return;
         }
     } else if (newPos < 0) {
         if (loop && rate < 0) {
-            m_firstFrame = true;
+            firstFrame = true;
             startPos = 1;
         } else if (rate >= 0) {
             // clip it to the first frame if we're working forwards
@@ -186,22 +238,22 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
             float *outBuf = out(0);
             outBuf[0] = -1.f;
             RELEASE_SNDBUF_SHARED(stftBuf);
-            DoneAction(static_cast<int>(in0(7)), this);
+            DoneAction(static_cast<int>(in0(8)), this);
             return;
         }
     }
 
     // The first frame has to be cloned directly from the STFT buffer with no phase adjustments.
     // This is essential to make sure that subsequent phase calculations are correctly aligned.
-    if (m_firstFrame) {
+    if (firstFrame) {
         // Compute the index of the first frame
         size_t firstFrameIdx = static_cast<size_t>(std::round(startPos * (stftFrames-1)));
         
         // Copy the FFT data over
-        SCPolarBuf *p = ToPolarApx(buf);
+        SCPolarBuf *outFrame = ToPolarApx(buf);
         const float *currentFftFrame = stftData + (firstFrameIdx * stftBufFftSize);
         // Fill the output buffer
-        fillPolarBuf(currentFftFrame, p, stftBufFftSize);
+        fillPolarBuf(currentFftFrame, outFrame, stftBufFftSize);
         
         // We always need to store the resultant FFT frame in the UGen.
         // It is used in the next call to PV_PlayBufStretch_next, for 
@@ -210,131 +262,225 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
 
         // We have to advance by one frame because we need to be able to compute frequency for time stretching.
         m_pos = static_cast<float>(firstFrameIdx + 1);
-        m_firstFrame = false;
+        firstFrame = false;
     }
     
     // For frames other than the first frame, we'll need to perform phase computation.
     else {
-        size_t phaseLock = sc_clip(static_cast<size_t>(in0(5)), 0, 2);
-        SCPolarBuf *p = ToPolarApx(buf);
-        size_t roundedPos = static_cast<size_t>(std::round(newPos));
+        // The phase computation mode
+        size_t mode = sc_clip(static_cast<size_t>(in0(5)), 0, 3);
+        SCPolarBuf *outFrame = ToPolarApx(buf);
+        
+        // The closest frame to the current position
+        int roundedPos = static_cast<int>(std::round(newPos));
     
-        // If we're right smack on a specific FFT frame, we don't
-        // need to do any magnitude or frequency interpolation, so
-        // we only need the current and previous FFT frames from the buffer.
-        if (std::abs(roundedPos-newPos) < 1e-3) {
-            size_t lastPos = rate >= 0 ? roundedPos - 1 : roundedPos + 1;
-            if (lastPos < 0) {
-                lastPos = roundedPos + 1;
-            } else if (lastPos >= stftFrames) {
-                lastPos = roundedPos - 1;
-            }
-            fillPolarBuf(stftData + (roundedPos * stftBufFftSize), m_frameNext, stftBufFftSize);
-            fillPolarBuf(stftData + (lastPos * stftBufFftSize), m_framePrev1, stftBufFftSize);
-            // Render the output FFT frame
-            switch (phaseLock) {
-                case 1:
-                    Stretch2Puckette(
-                        m_frameNext, 
-                        m_framePrev1, 
-                        p, 
-                        m_outFramePrev, 
-                        stftBufFftSize, 
-                        stftBufHopSize
-                    );
-                    break;
-                case 2:
-                    Stretch2LarocheDolson(
-                        m_frameNext, 
-                        m_framePrev1, 
-                        p, 
-                        m_outFramePrev, 
-                        m_peakFinder,
-                        stftBufFftSize, 
-                        stftBufHopSize
-                    );
-                    break;
-                default:
-                    Stretch2(
-                        m_frameNext, 
-                        m_framePrev1, 
-                        p, 
-                        m_outFramePrev, 
-                        stftBufFftSize, 
-                        stftBufHopSize
-                    );
-            }
-        } else {
-            // Otherwise we're between two FFT frames, and we're going to have to
-            // interpolate magnitude and frequency data.
-            size_t lo, hi, loprev;
-            if (rate >= 0) {                
-                lo = static_cast<size_t>(std::floor(newPos));
-                hi = static_cast<size_t>(std::ceil(newPos));
-                loprev = lo == 0 ? 0 : lo - 1;
+        // For traditional phase vocoder methods (classical phase vocoder, phase locking),
+        // we use a two-frame stretch or a three-frame stretch depending on the current position.
+        if (mode < 3) {
+            // If we're right smack on a specific FFT frame, we don't
+            // need to do any magnitude or frequency interpolation, so
+            // we only need the current and previous FFT frames from the buffer.
+            if (std::abs(roundedPos-newPos) < 1e-3) {
+                size_t lastPos = rate >= 0 ? roundedPos - 1 : roundedPos + 1;
+                if (lastPos < 0) {
+                    lastPos = roundedPos + 1;
+                } else if (lastPos >= stftFrames) {
+                    lastPos = roundedPos - 1;
+                }
+                fillPolarBuf(stftData + (roundedPos * stftBufFftSize), m_frameNext, stftBufFftSize);
+                fillPolarBuf(stftData + (lastPos * stftBufFftSize), m_framePrev1, stftBufFftSize);
+                // Render the output FFT frame
+                switch (mode) {
+                    case 1:
+                        Stretch2Puckette(
+                            m_frameNext, 
+                            m_framePrev1, 
+                            outFrame, 
+                            m_outFramePrev, 
+                            stftBufFftSize, 
+                            stftBufHopSize
+                        );
+                        break;
+                    case 2:
+                        Stretch2LarocheDolson(
+                            m_frameNext, 
+                            m_framePrev1, 
+                            outFrame, 
+                            m_outFramePrev, 
+                            stftBufFftSize, 
+                            stftBufHopSize
+                        );
+                        break;
+                    default:
+                        Stretch2(
+                            m_frameNext, 
+                            m_framePrev1, 
+                            outFrame, 
+                            m_outFramePrev, 
+                            stftBufFftSize, 
+                            stftBufHopSize
+                        );
+                }
+                
+                // Copy the magnitude data over
+                powerLinearInterp(nullptr, m_frameNext, outFrame, stftBufFftSize, 1.f);
             } else {
-                hi = static_cast<size_t>(std::floor(newPos));
-                lo = static_cast<size_t>(std::ceil(newPos));
-                loprev = lo + 1;
-                if (loprev >= stftFrames) loprev = lo;
+                // Otherwise we're between two FFT frames, and we're going to have to
+                // interpolate magnitude and frequency data.
+                int lo, hi, loMinus1;
+                float posFrac;
+                if (rate >= 0) {                
+                    lo = static_cast<int>(std::floor(newPos));
+                    hi = static_cast<int>(std::ceil(newPos));
+                    loMinus1 = lo == 0 ? 0 : lo - 1;
+                    posFrac = newPos - static_cast<float>(lo);
+                } else {
+                    hi = static_cast<int>(std::floor(newPos));
+                    lo = static_cast<int>(std::ceil(newPos));
+                    loMinus1 = lo + 1;
+                    if (loMinus1 >= stftFrames) loMinus1 = lo;
+                    posFrac = newPos - static_cast<float>(hi);
+                }
+
+                // We are in between these two frames
+                fillPolarBuf(stftData + (hi * stftBufFftSize), m_frameNext, stftBufFftSize);
+                fillPolarBuf(stftData + (lo * stftBufFftSize), m_framePrev1, stftBufFftSize);
+                // This is the frame right before that. It's needed to compute the previous instantaneous frequencies.
+                fillPolarBuf(stftData + (loMinus1 * stftBufFftSize), m_framePrev2, stftBufFftSize);
+                
+                // Render the output FFT frame
+                switch (mode) {
+                    case 1:
+                        Stretch3Puckette(
+                            m_frameNext, 
+                            m_framePrev1,
+                            m_framePrev2, 
+                            outFrame, 
+                            m_outFramePrev,
+                            posFrac, 
+                            stftBufFftSize, 
+                            stftBufHopSize
+                        );
+                        break;
+                    case 2:
+                        Stretch3LarocheDolson(
+                            m_frameNext, 
+                            m_framePrev1, 
+                            m_framePrev2, 
+                            outFrame, 
+                            m_outFramePrev, 
+                            posFrac, 
+                            stftBufFftSize, 
+                            stftBufHopSize
+                        );
+                        break;
+                    default:
+                        Stretch3(
+                            m_frameNext, 
+                            m_framePrev1, 
+                            m_framePrev2, 
+                            outFrame, 
+                            m_outFramePrev, 
+                            posFrac, 
+                            stftBufFftSize, 
+                            stftBufHopSize
+                        );
+                }
+
+                // Interpolate the magnitude data using power level
+                powerLinearInterp(m_framePrev1, m_frameNext, outFrame, stftBufFftSize, posFrac);
+            }
+        } 
+        
+        // RTPGHI algorithm, mode 3
+        else {
+            // Determine position between two adjacent STFT frames
+            float lo, hi, posFrac;
+
+            // Determine current, previous, and next indices
+            size_t currIdx, prevIdx, nextIdx;
+
+            // Need to alias the buffers so their names make logical sense
+            SCPolarBuf *currentFrame = m_framePrev1;
+            SCPolarBuf *nextFrame = m_frameNext;
+            SCPolarBuf *prevFrame = m_framePrev2;
+
+            if (rate >= 0) {
+                currIdx = static_cast<size_t>(sc_clip(roundedPos, 0, stftFrames-1));
+                prevIdx = static_cast<size_t>(sc_clip(roundedPos-1, 0, stftFrames-1));
+                nextIdx = static_cast<size_t>(sc_clip(roundedPos+1, 0, stftFrames-1));
+                lo = sc_clip(std::floor(newPos), 0.f, static_cast<float>(stftFrames-1));
+                hi = sc_clip(std::ceil(newPos), 0.f, static_cast<float>(stftFrames-1));
+                posFrac = newPos - lo;
+            } else {
+                currIdx = static_cast<size_t>(sc_clip(roundedPos, 0, stftFrames-1));
+                prevIdx = static_cast<size_t>(sc_clip(roundedPos+1, 0, stftFrames-1));
+                nextIdx = static_cast<size_t>(sc_clip(roundedPos-1, 0, stftFrames-1));
+                hi = static_cast<size_t>(sc_clip(std::floor(newPos), 0.f, stftFrames-1));
+                lo = static_cast<size_t>(sc_clip(std::ceil(newPos), 0.f, stftFrames-1));
+                posFrac = newPos - hi;
             }
 
-            // We are in between these two frames
-            fillPolarBuf(stftData + (hi * stftBufFftSize), m_frameNext, stftBufFftSize);
-            fillPolarBuf(stftData + (lo * stftBufFftSize), m_framePrev1, stftBufFftSize);
-            // This is the frame right before that. It's needed to compute the previous instantaneous frequencies.
-            fillPolarBuf(stftData + (loprev * stftBufFftSize), m_framePrev2, stftBufFftSize);
-            // Render the output FFT frame
-            switch (phaseLock) {
-                case 1:
-                    Stretch3Puckette(
-                        m_frameNext, 
-                        m_framePrev1,
-                        m_framePrev2, 
-                        p, 
-                        m_outFramePrev,
-                        newPos-static_cast<float>(lo), 
-                        stftBufFftSize, 
-                        stftBufHopSize
-                    );
-                    break;
-                case 2:
-                    Stretch3LarocheDolson(
-                        m_frameNext, 
-                        m_framePrev1, 
-                        m_framePrev2, 
-                        p, 
-                        m_outFramePrev, 
-                        m_peakFinder,
-                        newPos-static_cast<float>(lo), 
-                        stftBufFftSize, 
-                        stftBufHopSize
-                    );
-                    break;
-                default:
-                    Stretch3(
-                        m_frameNext, 
-                        m_framePrev1, 
-                        m_framePrev2, 
-                        p, 
-                        m_outFramePrev, 
-                        newPos-static_cast<float>(lo), 
-                        stftBufFftSize, 
-                        stftBufHopSize
-                    );
+            fillPolarBuf(stftData + (currIdx * stftBufFftSize), currentFrame, stftBufFftSize);
+            fillPolarBuf(stftData + (prevIdx * stftBufFftSize), prevFrame, stftBufFftSize);
+            fillPolarBuf(stftData + (nextIdx * stftBufFftSize), nextFrame, stftBufFftSize);
+
+            // Update the previous time gradient
+            size_t numScBins = stftBufFftSize/2-1;
+            for (size_t k = 0; k < numScBins; k++) {
+                m_pTimeGradient[k] = m_cTimeGradient[k];
+            }
+
+            // Compute the time and frequency partial derivatives
+            if (currIdx == prevIdx) {
+                cDiffTime(currentFrame, nullptr, nextFrame, m_cTimeGradient, stftBufFftSize, stftBufHopSize);
+            } else if (currIdx == nextIdx) {
+                cDiffTime(currentFrame, prevFrame, nullptr, m_cTimeGradient, stftBufFftSize, stftBufHopSize);
+            } else {
+                cDiffTime(currentFrame, prevFrame, nextFrame, m_cTimeGradient, stftBufFftSize, stftBufHopSize);
+            }
+            cDiffFreq(currentFrame, m_freqGradient, stftBufFftSize, static_cast<double>(stftBufNumOrigAudioFrames));
+
+            // We don't allow tol to be exactly 0 or 1.
+            const double tol = sc_clip(static_cast<double>(in0(7)), 1e-20, 1 - 1e-20);
+
+            Stretch2_RTPGHI(
+                currentFrame, 
+                prevFrame, 
+                m_cTimeGradient, 
+                m_pTimeGradient, 
+                m_freqGradient, 
+                outFrame, 
+                m_outFramePrev, 
+                1.0, // because we are keeping the same hop size 
+                tol, 
+                stftBufFftSize, 
+                stftBufHopSize, 
+                static_cast<double>(stftBufNumOrigAudioFrames)
+            );
+            
+            // Interpolate the magnitude data using power
+            if (std::abs(roundedPos-newPos) < 1e-3) {
+                powerLinearInterp(currentFrame, nullptr, outFrame, stftBufFftSize, 1);
+            } else if (currIdx == lo) {
+                powerLinearInterp(currentFrame, nextFrame, outFrame, stftBufFftSize, posFrac);
+            }
+            else {
+                powerLinearInterp(prevFrame, currentFrame, outFrame, stftBufFftSize, posFrac);
             }
         }
+
         // We always need to store the resultant FFT frame in the UGen.
-        // It is used in the next call to PV_PlayBufStretch_next, for 
+        // It is used in the next call to PV_PlayBufStretch_next for 
         // phase vocoder calculations.
-        copyPolarBuf(p, m_outFramePrev, static_cast<size_t>(numbins));
+        copyPolarBuf(outFrame, m_outFramePrev, static_cast<size_t>(numbins));
         m_pos = newPos;
     }
 
     RELEASE_SNDBUF_SHARED(stftBuf);
 }
 
-/// Computes a single frame of STFT data for time stretching.
+/// Computes a single frame of STFT phases for time stretching.
 /// The assumption is that we are positioned exactly at `frame`, and we therefore
 /// just need framePrev to compute the instantaneous frequency. We also do not
 /// need to perform any magnitude or frequency interpolation.
@@ -350,13 +496,10 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2(
     const SCPolarBuf *framePrev, 
     SCPolarBuf *outFrame, 
     const SCPolarBuf *outFramePrev, 
-    size_t fftSize, 
-    size_t hopSize) {
-    outFrame->dc = frame->dc;
-    outFrame->nyq = frame->nyq;
+    const size_t fftSize, 
+    const size_t hopSize
+) {
     for (size_t k = 0; k < fftSize/2-1; k++) {
-        outFrame->bin[k].mag = frame->bin[k].mag;
-
         // Compute the instantaneous frequency
         float omegaK = twopi * (k+1) / fftSize;
         float phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
@@ -371,7 +514,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2(
     }
 }
 
-/// Computes a single frame of STFT data for time stretching.
+/// Computes a single frame of STFT phases for time stretching.
 /// The assumption is that we are positioned exactly at `frame`, and we therefore
 /// just need framePrev to compute the instantaneous frequency. We also do not
 /// need to perform any magnitude or frequency interpolation.
@@ -389,13 +532,10 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2Puckette(
     const SCPolarBuf *framePrev, 
     SCPolarBuf *outFrame, 
     const SCPolarBuf *outFramePrev, 
-    size_t fftSize, 
-    size_t hopSize) {
-    outFrame->dc = frame->dc;
-    outFrame->nyq = frame->nyq;
+    const size_t fftSize, 
+    const size_t hopSize
+) {
     for (size_t k = 0; k < fftSize/2-1; k++) {
-        outFrame->bin[k].mag = frame->bin[k].mag;
-
         // Compute the instantaneous frequency
         float omegaK = twopi * (k+1) / fftSize;
         float phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
@@ -424,7 +564,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2Puckette(
     }
 }
 
-/// Computes a single frame of STFT data for time stretching,
+/// Computes a single frame of STFT phases for time stretching,
 /// using the Laroche/Dolson identity phase locking scheme.
 /// The assumption is that we are positioned exactly at `frame`, and we therefore
 /// just need framePrev to compute the instantaneous frequency. We also do not
@@ -441,21 +581,16 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2LarocheDolson(
     const SCPolarBuf *frame, 
     const SCPolarBuf *framePrev, 
     SCPolarBuf *outFrame, 
-    const SCPolarBuf *outFramePrev, 
-    PeakFinder *peakFinder,
-    size_t fftSize, 
-    size_t hopSize) {
-    outFrame->dc = frame->dc;
-    outFrame->nyq = frame->nyq;
-
+    const SCPolarBuf *outFramePrev,
+    const size_t fftSize, 
+    const size_t hopSize
+) {
     // Acquire peaks
-    peakFinder->analyze(frame);
+    m_peakFinder->analyze(frame);
 
-    if (peakFinder->size() == 0) {
+    if (m_peakFinder->size() == 0) {
         // No phase locking if no peaks were acquired
         for (size_t k = 0; k < fftSize/2-1; k++) {
-            outFrame->bin[k].mag = frame->bin[k].mag;
-
             // Compute the instantaneous frequency
             double omegaK = twopi * (k+1) / fftSize;
             double phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
@@ -470,9 +605,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2LarocheDolson(
         }
     } else {
         // Update any bins that occur below the lowest peak's region of influence
-        for (size_t k = 0; k < peakFinder->peaks[0].leftValley; k++) {
-            outFrame->bin[k].mag = frame->bin[k].mag;
-
+        for (size_t k = 0; k < m_peakFinder->peaks[0].leftValley; k++) {
             // Compute the instantaneous frequency
             double omegaK = twopi * (k+1) / fftSize;
             double phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
@@ -487,9 +620,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2LarocheDolson(
         }
 
         // Update any bins that occur above the highest peak's region of influence
-        for (size_t k = peakFinder->peaks[peakFinder->size()-1].rightValley + 1; k < fftSize / 2 - 1; k++) {
-            outFrame->bin[k].mag = frame->bin[k].mag;
-
+        for (size_t k = m_peakFinder->peaks[m_peakFinder->size()-1].rightValley + 1; k < fftSize / 2 - 1; k++) {
             // Compute the instantaneous frequency
             double omegaK = twopi * (k+1) / fftSize;
             double phaseInc = frame->bin[k].phase - framePrev->bin[k].phase - hopSize * omegaK;
@@ -504,10 +635,9 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2LarocheDolson(
         }
 
         // Update all other peaks
-        for (size_t n = 0; n < peakFinder->size(); n++) {
+        for (size_t n = 0; n < m_peakFinder->size(); n++) {
             // First we compute the new phase for the peak bin as usual
-            Peak peak = peakFinder->peaks[n];
-            outFrame->bin[peak.peak].mag = frame->bin[peak.peak].mag;
+            Peak peak = m_peakFinder->peaks[n];
 
             // Compute the instantaneous frequency
             double omegaK = twopi * (peak.peak+1) / fftSize;
@@ -523,14 +653,12 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2LarocheDolson(
 
             // Then we update the phases of all other peaks
             for (size_t o = peak.leftValley; o < peak.peak; o++) {
-                outFrame->bin[o].mag = frame->bin[o].mag;
                 outFrame->bin[o].phase = sc_wrap(
                     outFrame->bin[peak.peak].phase + frame->bin[o].phase - frame->bin[peak.peak].phase,
                     0.f,
                     static_cast<float>(twopi));
             }
             for (size_t o = peak.peak + 1; o <= peak.rightValley; o++) {
-                outFrame->bin[o].mag = frame->bin[o].mag;
                 outFrame->bin[o].phase = sc_wrap(
                     outFrame->bin[peak.peak].phase + frame->bin[o].phase - frame->bin[peak.peak].phase,
                     0.f,
@@ -540,7 +668,97 @@ void FlexPlugins::PV_PlayBufStretch::Stretch2LarocheDolson(
     }
 }
 
-/// Computes a single frame of STFT data for time stretching.
+/// Computes a single frame of STFT phases for time stretching, 
+/// using the RTPGHI algorithm.
+///
+/// \param currentFrame The current STFT frame
+/// \param prevFrame The previous STFT frame
+/// \param cTimeDiff The current time gradient vector
+/// \param pTimeDiff The previous time gradient vector
+/// \param cFreqDiff The current frequency gradient vector
+/// \param [out] outFrame The frame to write output STFT data to
+/// \param outFramePrev The previous output frame
+/// \param alpha The stretch factor
+/// \param tol The magnitude tolerance for phase calculation (0 < tol < 1)
+/// \param fftSize The FFT size
+/// \param hopSize The hop size
+/// \param signalLen The signal length
+void FlexPlugins::PV_PlayBufStretch::Stretch2_RTPGHI(
+    const SCPolarBuf *currentFrame, 
+    const SCPolarBuf *prevFrame, 
+    const float *cTimeDiff, 
+    const float *pTimeDiff,
+    const float *cFreqDiff, 
+    SCPolarBuf *outFrame, 
+    const SCPolarBuf *outFramePrev, 
+    const float alpha,
+    const double tol, 
+    const size_t fftSize, 
+    const size_t hopSize,
+    const double signalLen
+) {
+    RGen* rgen = mParent->mRGen;
+    uint32 s1 = rgen->s1;
+    uint32 s2 = rgen->s2;
+    uint32 s3 = rgen->s3;
+
+    size_t numScBins = fftSize/2-1;
+
+    // 1--compute abstol
+    double abstol = 0.0;
+    for (size_t k = 0; k < numScBins; k++) {
+        if (currentFrame->bin[k].mag * tol > abstol) {
+            abstol = currentFrame->bin[k].mag * tol;
+        }
+        if (prevFrame->bin[k].mag * tol > abstol) {
+            abstol = prevFrame->bin[k].mag * tol;
+        }
+    }
+
+    // 4--set up heap
+    m_pgHeap->clear();
+    
+    // 2--make I
+    // 3--rand phases for non-I bins
+    // 5--initialize heap
+    m_setI->clear();
+    for (size_t k = 0; k < numScBins; k++) {
+        if (prevFrame->bin[k].mag > abstol) {
+            m_setI->insert(k);
+            m_pgHeap->insert(prevFrame->bin[k].mag, {k, -1});
+        } else {
+            outFrame->bin[k].phase = rgen->frand() * twopi;
+        }
+    }
+
+    // 6--heap integration
+    while (m_setI->size() > 0) {
+        std::pair<double, std::pair<size_t, int>> bin = m_pgHeap->pop();
+        size_t m_h = bin.second.first;
+        int n = bin.second.second;
+        if (n < 0) {
+            if (m_setI->find(m_h)) {
+                outFrame->bin[m_h].phase = outFramePrev->bin[m_h].phase + 
+                    static_cast<double>(hopSize) * (cTimeDiff[m_h] + pTimeDiff[m_h]) / 2.0; 
+                m_setI->remove(m_h);
+                m_pgHeap->insert(currentFrame->bin[m_h].mag, {m_h, 0});
+            }
+        } else {
+            if (m_setI->find(m_h+1)) {
+                outFrame->bin[m_h+1].phase = outFrame->bin[m_h].phase + (alpha * signalLen) / (2.0 * static_cast<double>(fftSize)) * (cFreqDiff[m_h] + cFreqDiff[m_h+1]);
+                m_setI->remove(m_h+1);
+                m_pgHeap->insert(currentFrame->bin[m_h+1].mag, {m_h+1, 0});
+            }
+            if (m_setI->find(m_h-1)) {
+                outFrame->bin[m_h-1].phase = outFrame->bin[m_h].phase + (alpha * signalLen) / (2.0 * static_cast<double>(fftSize)) * (cFreqDiff[m_h] + cFreqDiff[m_h-1]);
+                m_setI->remove(m_h-1);
+                m_pgHeap->insert(currentFrame->bin[m_h-1].mag, {m_h-1, 0});
+            }
+        }
+    }
+}
+
+/// Computes a single frame of STFT phases for time stretching.
 /// The assumption is that we are positioned between framePrev1 and frameNext.
 /// This means we will need to interpolate frequency data. So we will need to
 /// compute two frequencies for each bin, and that means we need three STFT frames.
@@ -559,14 +777,10 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3(
     const SCPolarBuf *framePrev2, 
     SCPolarBuf *outFrame,
     const SCPolarBuf *outFramePrev,
-    float pos,
-    size_t fftSize, 
-    size_t hopSize) {
-    outFrame->dc = INTERP(framePrev1->dc, frameNext->dc, pos);
-    outFrame->nyq = INTERP(framePrev1->nyq, frameNext->nyq, pos);
+    const float pos,
+    const size_t fftSize, 
+    const size_t hopSize) {
     for (size_t k = 0; k < fftSize/2-1; k++) {
-        outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
-
         float omegaK = twopi * (k+1) / fftSize;
 
         // Compute the next instantaneous frequency
@@ -580,7 +794,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3(
         float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
         // Interpolate the instantaneous frequency
-        float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+        float instantaneousFreq = interp(instantaneousFreqPrev, instantaneousFreqNext, pos);
         
         // Compute the new phase
         outFrame->bin[k].phase = sc_wrap(
@@ -590,7 +804,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3(
     }
 }
 
-/// Computes a single frame of STFT data for time stretching.
+/// Computes a single frame of STFT phases for time stretching.
 /// The assumption is that we are positioned between framePrev1 and frameNext.
 /// This means we will need to interpolate frequency data. So we will need to
 /// compute two frequencies for each bin, and that means we need three STFT frames.
@@ -611,14 +825,11 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3Puckette(
     const SCPolarBuf *framePrev2, 
     SCPolarBuf *outFrame,
     const SCPolarBuf *outFramePrev,
-    float pos,
-    size_t fftSize, 
-    size_t hopSize) {
-    outFrame->dc = INTERP(framePrev1->dc, frameNext->dc, pos);
-    outFrame->nyq = INTERP(framePrev1->nyq, frameNext->nyq, pos);
+    const float pos,
+    const size_t fftSize, 
+    const size_t hopSize
+) {
     for (size_t k = 0; k < fftSize/2-1; k++) {
-        outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
-
         float omegaK = twopi * (k+1) / fftSize;
 
         // Compute the next instantaneous frequency
@@ -632,7 +843,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3Puckette(
         float instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
         // Interpolate the instantaneous frequency
-        float instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+        float instantaneousFreq = interp(instantaneousFreqPrev, instantaneousFreqNext, pos);
 
         // In Puckette-style phase locking, we make a substitution for the previous phase,
         // in order to "lock" phases of adjacent bins together.
@@ -656,7 +867,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3Puckette(
     }
 }
 
-/// Computes a single frame of STFT data for time stretching,
+/// Computes a single frame of STFT phases for time stretching,
 /// using the Laroche/Dolson identity phase locking scheme.
 /// The assumption is that we are positioned exactly at `frame`, and we therefore
 /// just need framePrev to compute the instantaneous frequency. We also do not
@@ -667,7 +878,6 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3Puckette(
 /// \param framePrev2 The previous STFT frame before that (required for instantaneous frequency interpolation)
 /// \param [out] outFrame The output STFT frame
 /// \param outFramePrev The previously computed output STFT frame
-/// \param peakFinder The PeakFinder instance for determining peak locations in the magnitude spectrum
 /// \param pos The position between framePrev1 and frameNext (0 < pos < 1)
 /// \param fftSize The FFT size
 /// \param hopSize The hop size
@@ -677,13 +887,10 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
     const SCPolarBuf *framePrev2, 
     SCPolarBuf *outFrame, 
     const SCPolarBuf *outFramePrev,
-    PeakFinder *peakFinder,
-    double pos,
-    size_t fftSize, 
-    size_t hopSize) {
-    outFrame->dc = INTERP(framePrev1->dc, frameNext->dc, pos);
-    outFrame->nyq = INTERP(framePrev1->nyq, frameNext->nyq, pos);
-    
+    const double pos,
+    const size_t fftSize, 
+    const size_t hopSize
+) {
     // Get the closest bin for phase relationships
     const SCPolarBuf *cframe = nullptr;
     if (pos >= 0.5) {
@@ -693,12 +900,11 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
     }
 
     // Acquire peaks
-    peakFinder->analyze(cframe);
+    m_peakFinder->analyze(cframe);
 
-    if (peakFinder->size() == 0) {
+    if (m_peakFinder->size() == 0) {
         // No phase locking if no peaks were acquired
         for (size_t k = 0; k < fftSize/2-1; k++) {
-            outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
             
             double omegaK = twopi * (k+1) / fftSize;
 
@@ -713,7 +919,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
             double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
             // Interpolate the instantaneous frequency
-            double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+            double instantaneousFreq = interp(instantaneousFreqPrev, instantaneousFreqNext, pos);
             
             // Compute the new phase
             outFrame->bin[k].phase = sc_wrap(
@@ -723,9 +929,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
         }
     } else {
         // Update any bins that occur below the lowest peak's region of influence
-        for (size_t k = 0; k < peakFinder->peaks[0].leftValley; k++) {
-            outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
-
+        for (size_t k = 0; k < m_peakFinder->peaks[0].leftValley; k++) {
             // Compute the instantaneous frequency
             double omegaK = twopi * (k+1) / fftSize;
 
@@ -739,7 +943,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
             double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
             // Interpolate the instantaneous frequency
-            double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+            double instantaneousFreq = interp(instantaneousFreqPrev, instantaneousFreqNext, pos);
 
             // Compute the phase
             outFrame->bin[k].phase = sc_wrap(
@@ -749,9 +953,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
         }
 
         // Update any bins that occur above the highest peak's region of influence
-        for (size_t k = peakFinder->peaks[peakFinder->size()-1].rightValley + 1; k < fftSize / 2 - 1; k++) {
-            outFrame->bin[k].mag = INTERP(framePrev1->bin[k].mag, frameNext->bin[k].mag, pos);
-
+        for (size_t k = m_peakFinder->peaks[m_peakFinder->size()-1].rightValley + 1; k < fftSize / 2 - 1; k++) {
             // Compute the instantaneous frequency
             double omegaK = twopi * (k+1) / fftSize;
 
@@ -765,7 +967,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
             double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
             // Interpolate the instantaneous frequency
-            double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+            double instantaneousFreq = interp(instantaneousFreqPrev, instantaneousFreqNext, pos);
 
             // Compute the phase
             outFrame->bin[k].phase = sc_wrap(
@@ -774,10 +976,9 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
                 static_cast<float>(twopi));
         }
         
-        for (size_t n = 0; n < peakFinder->size(); n++) {
+        for (size_t n = 0; n < m_peakFinder->size(); n++) {
             // First we compute the new phase for the peak bin as usual
-            Peak peak = peakFinder->peaks[n];
-            outFrame->bin[peak.peak].mag = INTERP(framePrev1->bin[peak.peak].mag, frameNext->bin[peak.peak].mag, pos);
+            Peak peak = m_peakFinder->peaks[n];
             
             // Compute the instantaneous frequency
             double omegaK = twopi * (peak.peak+1) / fftSize;
@@ -792,7 +993,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
             double instantaneousFreqPrev = omegaK + phaseInc/hopSize;
 
             // Interpolate the instantaneous frequency
-            double instantaneousFreq = INTERP(instantaneousFreqPrev, instantaneousFreqNext, pos);
+            double instantaneousFreq = interp(instantaneousFreqPrev, instantaneousFreqNext, pos);
 
             // Compute the phase
             outFrame->bin[peak.peak].phase = sc_wrap(
@@ -802,14 +1003,12 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
 
             // Then we update all bins in the region of influence
             for (size_t o = peak.leftValley; o < peak.peak; o++) {
-                outFrame->bin[o].mag = INTERP(framePrev1->bin[o].mag, frameNext->bin[o].mag, pos);
                 outFrame->bin[o].phase = sc_wrap(
                     outFrame->bin[peak.peak].phase + cframe->bin[o].phase - cframe->bin[peak.peak].phase,
                     0.f,
                     static_cast<float>(twopi));
             }
             for (size_t o = peak.peak + 1; o <= peak.rightValley; o++) {
-                outFrame->bin[o].mag = INTERP(framePrev1->bin[o].mag, frameNext->bin[o].mag, pos);
                 outFrame->bin[o].phase = sc_wrap(
                     outFrame->bin[peak.peak].phase + cframe->bin[o].phase - cframe->bin[peak.peak].phase,
                     0.f,
@@ -824,7 +1023,7 @@ void FlexPlugins::PV_PlayBufStretch::Stretch3LarocheDolson(
 /// \param fftBuf The FFT frame from the STFT buffer
 /// \param [out] polarBuf The SCPolarBuf to copy to
 /// \param fftSize The FFT size
-void FlexPlugins::PV_PlayBufStretch::fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, size_t fftSize) {
+void FlexPlugins::fillPolarBuf(const float *fftBuf, SCPolarBuf *polarBuf, const size_t fftSize) {
     polarBuf->dc = fftBuf[0];
     polarBuf->nyq = fftBuf[1];
     for (size_t n = 2, k = 0; n < fftSize; n+=2, k++) {
@@ -840,7 +1039,7 @@ void FlexPlugins::PV_PlayBufStretch::fillPolarBuf(const float *fftBuf, SCPolarBu
 /// \param sourceBuf The source buffer
 /// \param [out] destBuf The destination buffer
 /// \param numbins The number of bins in the SCPolarBuf (fftSize/2-1)
-void FlexPlugins::PV_PlayBufStretch::copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, size_t numbins) {
+void FlexPlugins::copyPolarBuf(const SCPolarBuf *sourceBuf, SCPolarBuf *destBuf, const size_t numbins) {
     destBuf->dc = sourceBuf->dc;
     destBuf->nyq = sourceBuf->nyq;
     for (size_t n = 0; n < numbins; n++) {
@@ -849,114 +1048,150 @@ void FlexPlugins::PV_PlayBufStretch::copyPolarBuf(const SCPolarBuf *sourceBuf, S
     }
 }
 
-FlexPlugins::Peak::Peak(size_t peak) : peak(peak) {}
-FlexPlugins::Peak::Peak(size_t peak, size_t leftValley, size_t rightValley) : peak(peak), leftValley(leftValley), rightValley(rightValley) {}
-
-FlexPlugins::PeakFinder::PeakFinder(size_t fftSize, size_t radius) {
-    m_maxSize = fftSize/2-1;
-    m_radius = radius;
-    m_size = 0;
-    peaks = nullptr;
-    m_queueL = nullptr;
-    m_queueR = nullptr;
+/// Computes the centered frequency gradient vector for a FFT frame
+///
+/// \param currentFrame The current FFT frame in the STFT matrix
+/// \param [out] freqGradient The output frequency gradient vector
+/// \param fftSize The FFT size
+/// \param signalLen The total length of the signal in samples
+void FlexPlugins::cDiffFreq(
+    const SCPolarBuf *currentFrame, 
+    float *freqGradient, 
+    const size_t fftSize, 
+    const double signalLen
+) {
+    size_t numScBins = fftSize/2-1;
+    const double bARecip = static_cast<double>(fftSize) / signalLen;
+    // compute forward derivative for first bin and backward derivative for last bin
+    freqGradient[0] = bARecip * princargRtpghi(currentFrame->bin[1].phase - currentFrame->bin[0].phase);
+    // fftSize/2-2 is the highest index of the bins because we aren't counting dc and nyquist
+    freqGradient[fftSize/2-2] = bARecip * princargRtpghi(currentFrame->bin[fftSize/2-2].phase - currentFrame->bin[fftSize/2-3].phase);
+    // compute centered derivatives for all other bins
+    for (size_t i = 1; i < numScBins-1; i++) {
+        freqGradient[i] = bARecip * (
+            princargRtpghi(currentFrame->bin[i+1].phase - currentFrame->bin[i].phase) + 
+            princargRtpghi(currentFrame->bin[i].phase - currentFrame->bin[i-1].phase)
+        ) / 2;
+    }
 }
 
-void FlexPlugins::PeakFinder::memLoad(void* arr) {
-    size_t *data = (size_t*)arr;
-    m_queueL = data;
-    m_queueR = data + m_radius;
-    peaks = (Peak*)(data + 2 * m_radius);
-}
-
-size_t FlexPlugins::PeakFinder::memSize() const {
-    return m_radius * 2 * sizeof(size_t) + m_maxSize * sizeof(Peak);
-}
-
-void* FlexPlugins::PeakFinder::memRetrieve() {
-    return (void*)m_queueL;
-}
-
-void FlexPlugins::PeakFinder::clear() {
-    m_size = 0;
-}
-
-size_t FlexPlugins::PeakFinder::maxSize() const {
-    return m_maxSize;
-}
-
-size_t FlexPlugins::PeakFinder::size() const {
-    return m_size;
-}
-
-void FlexPlugins::PeakFinder::analyze(const SCPolarBuf *buf) {
-    // We can only perform the analysis if we have enough bins
-    if (m_queueL && m_maxSize > m_radius * 2 + 1) {
-        m_size = 0;  // clear any existing data
-        
-        size_t i = m_radius;
-        while (i < m_maxSize - m_radius) {
-            bool isMax = true;
-            for (size_t j = i - m_radius; j < i; j++) {
-                if (buf->bin[j].mag >= buf->bin[i].mag) {
-                    isMax = false;
-                    break;
-                }
-            }
-            for (size_t j = i + 1; j <= i + m_radius; j++) {
-                if (buf->bin[j].mag >= buf->bin[i].mag) {
-                    isMax = false;
-                    break;
-                }
-            }
-            if (isMax) {
-                peaks[m_size] = Peak(i);
-                m_size++;
-                i += m_radius + 1;
-            } else {
-                i++;
-            }
+/// Computes the centered time phase gradient vector
+///
+/// \param currentFrame The current FFT frame
+/// \param prevFrame The previous FFT frame
+/// \param nextFrame The next FFT frame
+/// \param [out] timeGradient The output time gradient vector
+/// \param fftSize The FFT size
+/// \param hopSize The analysis hop size
+void FlexPlugins::cDiffTime(
+    const SCPolarBuf *currentFrame, 
+    const SCPolarBuf *prevFrame, 
+    const SCPolarBuf *nextFrame, 
+    float *timeGradient, 
+    const size_t fftSize, 
+    const size_t hopSize
+) {
+    size_t numScBins = fftSize/2-1;
+    if (prevFrame && nextFrame) {
+        // centered differentiation
+        for (size_t k = 0; k < numScBins; k++) {
+            const double backwardDiff = princargRtpghi(
+                currentFrame->bin[k].phase - prevFrame->bin[k].phase - 
+                    twopi * (k+1) * static_cast<double>(hopSize) / static_cast<double>(fftSize)
+            ) / static_cast<double>(hopSize) + twopi * (k+1) / static_cast<double>(fftSize);
+            const double forwardDiff = princargRtpghi(
+                nextFrame->bin[k].phase - currentFrame->bin[k].phase - 
+                    twopi * (k+1) * static_cast<double>(hopSize) / static_cast<double>(fftSize)
+            ) / static_cast<double>(hopSize) + twopi * (k+1) / static_cast<double>(fftSize);
+            timeGradient[k] = (backwardDiff + forwardDiff) / 2;
         }
+    } else if (nextFrame) {
+        // right differentiation
+        for (size_t k = 0; k < numScBins; k++) {
+            timeGradient[k] = princargRtpghi(
+                nextFrame->bin[k].phase - currentFrame->bin[k].phase - 
+                    twopi * (k+1) * static_cast<double>(hopSize) / static_cast<double>(fftSize)
+            ) / static_cast<double>(hopSize) + twopi * (k+1) / static_cast<double>(fftSize);
+        }
+    } else {
+        // left differentiation
+        for (size_t k = 0; k < numScBins; k++) {
+            timeGradient[k] = princargRtpghi(
+                currentFrame->bin[k].phase - prevFrame->bin[k].phase - 
+                    twopi * (k+1) * static_cast<double>(hopSize) / static_cast<double>(fftSize)
+            ) / static_cast<double>(hopSize) + twopi * (k+1) / static_cast<double>(fftSize);
+        }
+    }
+}
 
-        // Find the left valley for the first peak, and the right valley
-        // for the last peak.
-        if (m_size > 0) {
-            float min = buf->bin[0].mag;
-            size_t argmin = 0;
-            size_t k = 1;
-            for (; k < peaks[0].peak; k++) {
-                if (buf->bin[k].mag < min) {
-                    min = buf->bin[k].mag;
-                    argmin = k;
-                }
-            }
-            peaks[0].leftValley = argmin;
-            k = peaks[m_size-1].peak + 1;
-            min = buf->bin[k].mag;
-            argmin = k;
-            for (k++; k < m_maxSize; k++) {
-                if (buf->bin[k].mag < min) {
-                    min = buf->bin[k].mag;
-                    argmin = k;
-                }
-            }
-            peaks[m_size-1].rightValley = argmin;
-        } 
-        
-        // Find the remaining left and right valleys
-        if (m_size > 1) {
-            for (size_t j = 0; j < m_size-1; j++) {                
-                size_t k = peaks[j].peak + 1;
-                float min = buf->bin[k].mag;
-                size_t argmin = k;
-                for (k++; k < peaks[j+1].peak; k++) {
-                    if (buf->bin[k].mag < min) {
-                        min = buf->bin[k].mag;
-                        argmin = k;
-                    }
-                }
-                peaks[j].rightValley = argmin - 1;
-                peaks[j+1].leftValley = argmin;
-            }
+/// Linearly interpolates the magnitude of two STFT frames
+/// 
+/// \param prevFrame The previous STFT frame
+/// \param nextFrame The next STFT frame
+/// \param [out] out The output STFT frame
+/// \param fftSize The FFT size
+/// \param pos The position between the two frames (0 <= pos <= 1)
+void FlexPlugins::magLinearInterp(
+    const SCPolarBuf *prevFrame, 
+    const SCPolarBuf *nextFrame, 
+    SCPolarBuf *out, 
+    const size_t fftSize, 
+    const float pos
+) {
+    size_t numScBins = fftSize/2-1;
+    if (prevFrame && nextFrame) {
+        out->dc = interp(prevFrame->dc, nextFrame->dc, pos);
+        out->nyq = interp(prevFrame->nyq, nextFrame->nyq, pos);
+        for (size_t k = 0; k < numScBins; k++) {
+            out->bin[k].mag = interp(prevFrame->bin[k].mag, nextFrame->bin[k].mag, pos);
+        }
+    } else if (prevFrame) {
+        out->dc = prevFrame->dc;
+        out->nyq = prevFrame->nyq;
+        for (size_t k = 0; k < numScBins; k++) {
+            out->bin[k].mag = prevFrame->bin[k].mag;
+        }
+    } else if (nextFrame) {
+        out->dc = nextFrame->dc;
+        out->nyq = nextFrame->nyq;
+        for (size_t k = 0; k < numScBins; k++) {
+            out->bin[k].mag = nextFrame->bin[k].mag;
+        }
+    }
+}
+
+/// Linearly interpolates the magnitude of two STFT frames using the power
+/// 
+/// \param prevFrame The previous STFT frame
+/// \param nextFrame The next STFT frame
+/// \param [out] out The output STFT frame
+/// \param fftSize The FFT size
+/// \param pos The position between the two frames (0 <= pos <= 1)
+void FlexPlugins::powerLinearInterp(
+    const SCPolarBuf *prevFrame, 
+    const SCPolarBuf *nextFrame, 
+    SCPolarBuf *out, 
+    const size_t fftSize, 
+    const float pos
+) {
+    size_t numScBins = fftSize/2-1;
+    if (prevFrame && nextFrame) {
+        out->dc = interpPower(prevFrame->dc, nextFrame->dc, pos);
+        out->nyq = interpPower(prevFrame->nyq, nextFrame->nyq, pos);
+        for (size_t k = 0; k < numScBins; k++) {
+            out->bin[k].mag = interpPower(prevFrame->bin[k].mag, nextFrame->bin[k].mag, pos);
+        }
+    } else if (prevFrame) {
+        out->dc = prevFrame->dc;
+        out->nyq = prevFrame->nyq;
+        for (size_t k = 0; k < numScBins; k++) {
+            out->bin[k].mag = prevFrame->bin[k].mag;
+        }
+    } else if (nextFrame) {
+        out->dc = nextFrame->dc;
+        out->nyq = nextFrame->nyq;
+        for (size_t k = 0; k < numScBins; k++) {
+            out->bin[k].mag = nextFrame->bin[k].mag;
         }
     }
 }

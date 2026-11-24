@@ -1,11 +1,15 @@
-# Create the project library
 add_library(pv MODULE pv.cpp)
+add_library(hashtable STATIC hashtable.cpp)
+add_library(peakFinder STATIC peakFinder.cpp)
 add_library(pvCFreeze STATIC pvCFreeze.cpp)
 add_library(pvOther STATIC pvOther.cpp)
 add_library(pvStretch STATIC pvStretch.cpp)
+set_target_properties(hashtable PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(peakFinder PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(pvCFreeze PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(pvOther PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(pvStretch PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(pvStretch PRIVATE hashtable peakFinder)
 target_link_libraries(pv PRIVATE pvCFreeze pvOther pvStretch)
 
 if(SUPERNOVA)
