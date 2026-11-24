@@ -86,7 +86,7 @@ namespace FlexPlugins {
         const SCPolarBuf *nextFrame, 
         SCPolarBuf *out, 
         const size_t fftSize, 
-        const double pos
+        const float pos
     );
     
     /// Linearly interpolates the magnitude of two STFT frames using the power
@@ -101,7 +101,7 @@ namespace FlexPlugins {
         const SCPolarBuf *nextFrame, 
         SCPolarBuf *out, 
         const size_t fftSize, 
-        const double pos
+        const float pos
     );
 
     /// Stores the state of a PV_PlayBufStretch UGen instance

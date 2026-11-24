@@ -76,8 +76,8 @@ FlexPlugins::PV_PlayBufStretch::PV_PlayBufStretch() {
     }
 
     // Configure position
-    m_pos = 0.f;
-    m_startPos = sc_clip<float>(in0(2), 0.0, 1.0);
+    m_pos = 0.f; // the current position in the buffer
+    m_startPos = -1.f; // this forces the first frame to read phase data directly
 
     set_calc_function<PV_PlayBufStretch, &PV_PlayBufStretch::next>();
     next(1);
@@ -189,6 +189,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
         float *frameNext = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
         float *framePrev1 = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
         float *framePrev2 = (float*)RTAlloc(mWorld, stftBufFftSize * sizeof(float));
+        // uggggghh
         m_outFramePrev = (SCPolarBuf*)outFramePrev;
         m_frameNext = (SCPolarBuf*)frameNext;
         m_framePrev1 = (SCPolarBuf*)framePrev1;
@@ -202,6 +203,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
     // If we're on the first frame, we'll just read phase data directly.
     bool firstFrame = false;
     
+    // If the start position changed, we jump directly to the new start position.
     if (startPos != m_startPos) {
         m_startPos = startPos;
         firstFrame = true;
@@ -222,7 +224,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
             float *outBuf = out(0);
             outBuf[0] = -1.f;
             RELEASE_SNDBUF_SHARED(stftBuf);
-            DoneAction(0, this);
+            DoneAction(static_cast<int>(in0(8)), this);
             return;
         }
     } else if (newPos < 0) {
@@ -236,7 +238,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
             float *outBuf = out(0);
             outBuf[0] = -1.f;
             RELEASE_SNDBUF_SHARED(stftBuf);
-            DoneAction(0, this);
+            DoneAction(static_cast<int>(in0(8)), this);
             return;
         }
     }
@@ -265,11 +267,15 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
     
     // For frames other than the first frame, we'll need to perform phase computation.
     else {
+        // The phase computation mode
         size_t mode = sc_clip(static_cast<size_t>(in0(5)), 0, 3);
         SCPolarBuf *outFrame = ToPolarApx(buf);
+        
+        // The closest frame to the current position
         int roundedPos = static_cast<int>(std::round(newPos));
     
-        // For traditional phase vocoder methods
+        // For traditional phase vocoder methods (classical phase vocoder, phase locking),
+        // we use a two-frame stretch or a three-frame stretch depending on the current position.
         if (mode < 3) {
             // If we're right smack on a specific FFT frame, we don't
             // need to do any magnitude or frequency interpolation, so
@@ -317,20 +323,23 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
                 }
                 
                 // Copy the magnitude data over
-                powerLinearInterp(m_framePrev1, m_frameNext, outFrame, stftBufFftSize, 1.f);
+                powerLinearInterp(nullptr, m_frameNext, outFrame, stftBufFftSize, 1.f);
             } else {
                 // Otherwise we're between two FFT frames, and we're going to have to
                 // interpolate magnitude and frequency data.
-                size_t lo, hi, loMinus1;
+                int lo, hi, loMinus1;
+                float posFrac;
                 if (rate >= 0) {                
-                    lo = static_cast<size_t>(std::floor(newPos));
-                    hi = static_cast<size_t>(std::ceil(newPos));
+                    lo = static_cast<int>(std::floor(newPos));
+                    hi = static_cast<int>(std::ceil(newPos));
                     loMinus1 = lo == 0 ? 0 : lo - 1;
+                    posFrac = newPos - static_cast<float>(lo);
                 } else {
-                    hi = static_cast<size_t>(std::floor(newPos));
-                    lo = static_cast<size_t>(std::ceil(newPos));
+                    hi = static_cast<int>(std::floor(newPos));
+                    lo = static_cast<int>(std::ceil(newPos));
                     loMinus1 = lo + 1;
                     if (loMinus1 >= stftFrames) loMinus1 = lo;
+                    posFrac = newPos - static_cast<float>(hi);
                 }
 
                 // We are in between these two frames
@@ -348,7 +357,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
                             m_framePrev2, 
                             outFrame, 
                             m_outFramePrev,
-                            newPos-static_cast<float>(lo), 
+                            posFrac, 
                             stftBufFftSize, 
                             stftBufHopSize
                         );
@@ -360,7 +369,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
                             m_framePrev2, 
                             outFrame, 
                             m_outFramePrev, 
-                            newPos-static_cast<float>(lo), 
+                            posFrac, 
                             stftBufFftSize, 
                             stftBufHopSize
                         );
@@ -372,22 +381,21 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
                             m_framePrev2, 
                             outFrame, 
                             m_outFramePrev, 
-                            newPos-static_cast<float>(lo), 
+                            posFrac, 
                             stftBufFftSize, 
                             stftBufHopSize
                         );
                 }
 
                 // Interpolate the magnitude data using power level
-                powerLinearInterp(m_framePrev1, m_frameNext, outFrame, stftBufFftSize, newPos-static_cast<float>(lo));
+                powerLinearInterp(m_framePrev1, m_frameNext, outFrame, stftBufFftSize, posFrac);
             }
         } 
         
         // RTPGHI algorithm, mode 3
         else {
             // Determine position between two adjacent STFT frames
-            size_t lo, hi;
-            float posFrac;
+            float lo, hi, posFrac;
 
             // Determine current, previous, and next indices
             size_t currIdx, prevIdx, nextIdx;
@@ -401,16 +409,16 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
                 currIdx = static_cast<size_t>(sc_clip(roundedPos, 0, stftFrames-1));
                 prevIdx = static_cast<size_t>(sc_clip(roundedPos-1, 0, stftFrames-1));
                 nextIdx = static_cast<size_t>(sc_clip(roundedPos+1, 0, stftFrames-1));
-                lo = static_cast<size_t>(sc_clip(std::floor(newPos), 0, stftFrames-1));
-                hi = static_cast<size_t>(sc_clip(std::ceil(newPos), 0, stftFrames-1));
-                posFrac = newPos - static_cast<float>(lo);
+                lo = sc_clip(std::floor(newPos), 0.f, static_cast<float>(stftFrames-1));
+                hi = sc_clip(std::ceil(newPos), 0.f, static_cast<float>(stftFrames-1));
+                posFrac = newPos - lo;
             } else {
                 currIdx = static_cast<size_t>(sc_clip(roundedPos, 0, stftFrames-1));
                 prevIdx = static_cast<size_t>(sc_clip(roundedPos+1, 0, stftFrames-1));
                 nextIdx = static_cast<size_t>(sc_clip(roundedPos-1, 0, stftFrames-1));
-                hi = static_cast<size_t>(sc_clip(std::floor(newPos), 0, stftFrames-1));
-                lo = static_cast<size_t>(sc_clip(std::ceil(newPos), 0, stftFrames-1));
-                posFrac = newPos - static_cast<float>(hi);
+                hi = static_cast<size_t>(sc_clip(std::floor(newPos), 0.f, stftFrames-1));
+                lo = static_cast<size_t>(sc_clip(std::ceil(newPos), 0.f, stftFrames-1));
+                posFrac = newPos - hi;
             }
 
             fillPolarBuf(stftData + (currIdx * stftBufFftSize), currentFrame, stftBufFftSize);
@@ -423,7 +431,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
                 m_pTimeGradient[k] = m_cTimeGradient[k];
             }
 
-            // Compute the current gradients
+            // Compute the time and frequency partial derivatives
             if (currIdx == prevIdx) {
                 cDiffTime(currentFrame, nullptr, nextFrame, m_cTimeGradient, stftBufFftSize, stftBufHopSize);
             } else if (currIdx == nextIdx) {
@@ -444,7 +452,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
                 m_freqGradient, 
                 outFrame, 
                 m_outFramePrev, 
-                sc_clip(1.0/static_cast<double>(rate), 1e-3, 1e3), 
+                1.0, // because we are keeping the same hop size 
                 tol, 
                 stftBufFftSize, 
                 stftBufHopSize, 
@@ -463,7 +471,7 @@ void FlexPlugins::PV_PlayBufStretch::next(int inNumSamples) {
         }
 
         // We always need to store the resultant FFT frame in the UGen.
-        // It is used in the next call to PV_PlayBufStretch_next, for 
+        // It is used in the next call to PV_PlayBufStretch_next for 
         // phase vocoder calculations.
         copyPolarBuf(outFrame, m_outFramePrev, static_cast<size_t>(numbins));
         m_pos = newPos;
@@ -1128,14 +1136,14 @@ void FlexPlugins::magLinearInterp(
     const SCPolarBuf *nextFrame, 
     SCPolarBuf *out, 
     const size_t fftSize, 
-    const double pos
+    const float pos
 ) {
     size_t numScBins = fftSize/2-1;
     if (prevFrame && nextFrame) {
-        out->dc = interp(prevFrame->dc, nextFrame->dc, static_cast<float>(pos));
-        out->nyq = interp(prevFrame->nyq, nextFrame->nyq, static_cast<float>(pos));
+        out->dc = interp(prevFrame->dc, nextFrame->dc, pos);
+        out->nyq = interp(prevFrame->nyq, nextFrame->nyq, pos);
         for (size_t k = 0; k < numScBins; k++) {
-            out->bin[k].mag = interp(prevFrame->bin[k].mag, nextFrame->bin[k].mag, static_cast<float>(pos));
+            out->bin[k].mag = interp(prevFrame->bin[k].mag, nextFrame->bin[k].mag, pos);
         }
     } else if (prevFrame) {
         out->dc = prevFrame->dc;
@@ -1164,14 +1172,14 @@ void FlexPlugins::powerLinearInterp(
     const SCPolarBuf *nextFrame, 
     SCPolarBuf *out, 
     const size_t fftSize, 
-    const double pos
+    const float pos
 ) {
     size_t numScBins = fftSize/2-1;
     if (prevFrame && nextFrame) {
-        out->dc = interpPower(prevFrame->dc, nextFrame->dc, static_cast<float>(pos));
-        out->nyq = interpPower(prevFrame->nyq, nextFrame->nyq, static_cast<float>(pos));
+        out->dc = interpPower(prevFrame->dc, nextFrame->dc, pos);
+        out->nyq = interpPower(prevFrame->nyq, nextFrame->nyq, pos);
         for (size_t k = 0; k < numScBins; k++) {
-            out->bin[k].mag = interpPower(prevFrame->bin[k].mag, nextFrame->bin[k].mag, static_cast<float>(pos));
+            out->bin[k].mag = interpPower(prevFrame->bin[k].mag, nextFrame->bin[k].mag, pos);
         }
     } else if (prevFrame) {
         out->dc = prevFrame->dc;
